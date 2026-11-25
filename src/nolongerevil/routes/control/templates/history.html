@@ -29,16 +29,21 @@
     .axis-unit.left { left: 4px; padding: 1px 2px; border: none; background: none; cursor: pointer; text-decoration: underline dotted; }
     .axis-unit.right { right: 4px; }
     .controls { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
-    dialog { margin: auto; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: min(760px, 94vw); max-height: 90vh; }
+    dialog { margin: auto; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: min(520px, 94vw); max-height: none; overflow: visible; }
     dialog::backdrop { background: rgba(15, 23, 42, .55); }
     dialog { position: relative; overscroll-behavior: contain; }
     dialog .close { position: absolute; top: 8px; right: 8px; }
-    dialog .row > span.label { min-width: 140px; }
-    .indent { margin: -2px 0 10px 154px; }
+    dialog .row { flex-wrap: nowrap; white-space: nowrap; }
+    dialog .row > span.label { min-width: 0; flex: none; }
+    dialog .row select { min-width: 0; flex: 0 1 auto; }  /* Long choices shrink instead of covering the label */
+    dialog input[type=number] { width: 70px; }
+    dialog .note, dialog .muted, dialog .error { white-space: normal; }
+    .indent { margin: -2px 0 10px; }
     .facts { font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
     .facts b { font-weight: 600; }
     .locked { overflow: hidden; }
     #settings { margin-top: 4px; }
+    .dl-title { font-size: 12.5px; margin: 4px 0 8px; white-space: nowrap; }
     a { color: var(--accent); }
     section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
     h2 { font-size: 15px; margin-bottom: 10px; }
@@ -144,10 +149,10 @@
       <div class="row" id="intervalRow"><span class="label">Recording interval</span>
         <label><input type="number" name="interval_s" min="10" step="1"> s</label>
       </div>
-      <div class="row" id="updateRow"><span class="label">Updates</span>
-        <label>temperature ≥ <input type="number" name="temp_step" min="0" max="5" step="0.05"> °C</label>
-        <label>humidity ≥ <input type="number" name="humidity_step" min="0" max="20" step="0.5"> %</label>
-        <label>at least every <input type="number" name="keepalive_s" min="60" step="1"> s</label>
+      <div id="updateRows">
+        <div class="row"><span class="label">Temperature change ≥</span><label><input type="number" name="temp_step" min="0" max="5" step="0.05"> °C</label></div>
+        <div class="row"><span class="label">Humidity change ≥</span><label><input type="number" name="humidity_step" min="0" max="20" step="0.5"> %</label></div>
+        <div class="row"><span class="label">At least every</span><label><input type="number" name="keepalive_s" min="60" step="1"> s</label></div>
       </div>
       <div class="row"><span class="label">Keep</span>
         <select name="retention"><option value="days">The last</option><option value="size">Up to</option></select>
@@ -159,7 +164,8 @@
       <div class="row" id="recordRow"><span class="label">Thermostats</span><span id="recordDevices" class="row" style="margin:0"></span></div>
       <p id="settingsMsg" class="muted indent"></p>
     </form>
-    <div class="row"><span class="label">Download</span>
+    <p class="dl-title">Download the data from the plot shown on the page</p>
+    <div class="row">
       <select id="download">
         <option value="samples:csv">Readings (CSV)</option>
         <option value="samples:xlsx">Readings (Excel)</option>
@@ -170,7 +176,6 @@
       </select>
       <button class="primary" id="downloadButton">Download</button>
     </div>
-    <p class="note indent">For the thermostats, range and unit shown on the page.</p>
   </dialog>
 
   <script src="static/uplot/uPlot.iife.min.js"></script>
@@ -496,10 +501,32 @@
 
     // Settings and storage
 
+    // One zone per distinct set of clock rules, named after its best-known cities
+    const ZONES = [
+      ['Pacific/Honolulu', 'Honolulu'], ['America/Anchorage', 'Anchorage'],
+      ['America/Los_Angeles', 'Los Angeles, Vancouver'], ['America/Phoenix', 'Phoenix'],
+      ['America/Denver', 'Denver, Calgary'], ['America/Chicago', 'Chicago, Winnipeg'],
+      ['America/Mexico_City', 'Mexico City'], ['America/Bogota', 'Bogotá, Lima'],
+      ['America/New_York', 'New York, Toronto'], ['America/Halifax', 'Halifax'],
+      ['America/St_Johns', "St. John's"], ['America/Sao_Paulo', 'São Paulo'],
+      ['America/Argentina/Buenos_Aires', 'Buenos Aires'], ['Atlantic/Azores', 'Azores'],
+      ['UTC', 'UTC'], ['Europe/London', 'London, Dublin, Lisbon'],
+      ['Africa/Lagos', 'Lagos, Algiers'], ['Europe/Paris', 'Paris, Berlin, Madrid, Rome'],
+      ['Africa/Johannesburg', 'Johannesburg'], ['Africa/Cairo', 'Cairo'],
+      ['Europe/Athens', 'Athens, Helsinki, Kyiv'], ['Asia/Jerusalem', 'Jerusalem'],
+      ['Europe/Istanbul', 'Istanbul'], ['Europe/Moscow', 'Moscow'],
+      ['Asia/Riyadh', 'Riyadh, Nairobi'], ['Asia/Tehran', 'Tehran'], ['Asia/Dubai', 'Dubai'],
+      ['Asia/Kabul', 'Kabul'], ['Asia/Karachi', 'Karachi'], ['Asia/Kolkata', 'Mumbai, Delhi'],
+      ['Asia/Kathmandu', 'Kathmandu'], ['Asia/Dhaka', 'Dhaka'], ['Asia/Bangkok', 'Bangkok, Jakarta'],
+      ['Asia/Shanghai', 'Beijing, Singapore, Perth'], ['Asia/Tokyo', 'Tokyo, Seoul'],
+      ['Australia/Darwin', 'Darwin'], ['Australia/Adelaide', 'Adelaide'],
+      ['Australia/Brisbane', 'Brisbane'], ['Australia/Sydney', 'Sydney, Melbourne'],
+      ['Pacific/Auckland', 'Auckland'],
+    ];
+
     function zoneOptions(current) {
-      let zones = [];
-      try { zones = Intl.supportedValuesOf('timeZone'); } catch {}
-      for (const z of ['UTC', current]) if (z && !zones.includes(z)) zones.unshift(z);
+      const zones = ZONES.slice();
+      if (current && !zones.some(([z]) => z === current)) zones.push([current, current.split('/').pop().replaceAll('_', ' ')]);
       const now = new Date();
       const offset = z => {
         try {
@@ -508,9 +535,9 @@
         } catch { return 'UTC'; }
       };
       const minutes = o => { const m = /([+-])(\d+):(\d+)/.exec(o); return m ? (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : 0; };
-      return zones.map(z => [z, offset(z)])
-        .sort((a, b) => minutes(a[1]) - minutes(b[1]) || a[0].localeCompare(b[0]))
-        .map(([z, o]) => Object.assign(document.createElement('option'), {value: z, textContent: `(${o}) ${z.replaceAll('_', ' ')}`}));
+      return zones.map(([z, label]) => [z, label, offset(z)])
+        .sort((a, b) => minutes(a[2]) - minutes(b[2]) || a[1].localeCompare(b[1]))
+        .map(([z, label, o]) => Object.assign(document.createElement('option'), {value: z, textContent: z === 'UTC' ? 'UTC' : `(${o}) ${label}`}));
     }
 
     async function loadStats() {
@@ -549,7 +576,7 @@
     function updateForm() {
       const f = $('settings').elements;
       $('intervalRow').hidden = f.mode.value === 'changes';
-      $('updateRow').hidden = f.mode.value !== 'changes';
+      $('updateRows').hidden = f.mode.value !== 'changes';
       f.retention_days.parentElement.hidden = f.retention.value !== 'days';
       f.retention_mb.parentElement.hidden = f.retention.value !== 'size';
     }
