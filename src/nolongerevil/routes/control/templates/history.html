@@ -14,8 +14,23 @@
     * { box-sizing: border-box; margin: 0; }
     [hidden] { display: none !important; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 1100px; margin: 0 auto; padding: 20px 14px; }
-    header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    header .title { display: flex; align-items: center; gap: 6px; }
     header h1 { font-size: 22px; }
+    .btn-icon { background: none; border: none; cursor: pointer; color: var(--text3); padding: 6px; border-radius: 8px; font-size: 18px; line-height: 1; display: inline-flex; align-items: center; text-decoration: none; }
+    .btn-icon:hover { background: var(--border); color: var(--text); }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 8px; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+    .chip.off { opacity: .4; }
+    .chip.key { cursor: default; background: none; border-color: transparent; color: var(--text2); }
+    .readout { font-size: 12px; color: var(--text2); min-height: 1.4em; margin-top: 6px; }
+    .controls { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+    dialog { margin: auto; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: min(760px, 94vw); max-height: 90vh; }
+    dialog::backdrop { background: rgba(15, 23, 42, .55); }
+    dialog h2 { margin-top: 14px; }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; }
+    .dialog-head h2 { margin: 0; }
+    #settings { margin-top: 12px; }
     a { color: var(--accent); }
     section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
     h2 { font-size: 15px; margin-bottom: 10px; }
@@ -27,7 +42,6 @@
     button.on, button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
     input[type=checkbox] { padding: 0; }
     input[type=number] { width: 90px; }
-    .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
     .note, .muted { font-size: 12px; color: var(--text3); }
     .chart { width: 100%; min-height: 120px; }
     .empty { color: var(--text3); font-size: 14px; padding: 30px 0; text-align: center; }
@@ -45,32 +59,24 @@
 </head>
 <body>
   <header>
-    <a href="./">&larr; Dashboard</a>
-    <h1>History</h1>
+    <div class="title"><a href="./" class="btn-icon" title="Dashboard" aria-label="Dashboard">&larr;</a><h1>History</h1></div>
+    <button class="btn-icon" id="openSettings" title="Recording settings" aria-label="Recording settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10M10,22C9.75,22 9.54,21.82 9.5,21.58L9.13,18.93C8.5,18.68 7.96,18.34 7.44,17.94L4.95,18.95C4.73,19.03 4.46,18.95 4.34,18.73L2.34,15.27C2.21,15.05 2.27,14.78 2.46,14.63L4.57,12.97L4.5,12L4.57,11L2.46,9.37C2.27,9.22 2.21,8.95 2.34,8.73L4.34,5.27C4.46,5.05 4.73,4.96 4.95,5.05L7.44,6.05C7.96,5.66 8.5,5.32 9.13,5.07L9.5,2.42C9.54,2.18 9.75,2 10,2H14C14.25,2 14.46,2.18 14.5,2.42L14.87,5.07C15.5,5.32 16.04,5.66 16.56,6.05L19.05,5.05C19.27,4.96 19.54,5.05 19.66,5.27L21.66,8.73C21.79,8.95 21.73,9.22 21.54,9.37L19.43,11L19.5,12L19.43,13L21.54,14.63C21.73,14.78 21.79,15.05 21.66,15.27L19.66,18.73C19.54,18.95 19.27,19.04 19.05,18.95L16.56,17.95C16.04,18.34 15.5,18.68 14.87,18.93L14.5,21.58C14.46,21.82 14.25,22 14,22H10M11.25,4L10.88,6.61C9.68,6.86 8.62,7.5 7.85,8.39L5.44,7.35L4.69,8.65L6.8,10.2C6.4,11.37 6.4,12.64 6.8,13.8L4.68,15.36L5.43,16.66L7.86,15.62C8.63,16.5 9.68,17.14 10.87,17.38L11.24,20H12.76L13.13,17.39C14.32,17.14 15.37,16.5 16.14,15.62L18.57,16.66L19.32,15.36L17.2,13.81C17.6,12.64 17.6,11.37 17.2,10.2L19.31,8.65L18.56,7.35L16.15,8.39C15.38,7.5 14.32,6.86 13.11,6.62L12.75,4H11.25Z"/></svg></button>
   </header>
 
   <section>
-    <div class="row"><span class="label">Thermostats</span><span id="devices" class="row" style="margin:0"></span></div>
-    <div class="row"><span class="label">Range</span>
-      <span id="presets"></span>
-      <label>From <input type="datetime-local" id="from"></label>
-      <label>To <input type="datetime-local" id="to"></label>
-      <button id="apply">Show</button>
-    </div>
-    <div class="row"><span class="label">Show</span>
-      <label><input type="checkbox" data-show="temp" checked> Temperature</label>
-      <label><input type="checkbox" data-show="target" checked> Setpoint</label>
-      <label><input type="checkbox" data-show="humidity" checked> Humidity</label>
-      <label><input type="checkbox" data-show="outdoor" checked> Outdoor</label>
-      <label><input type="checkbox" data-show="events" checked> Changes</label>
-      <label>Unit <select id="unit"><option value="C">°C</option><option value="F">°F</option></select></label>
-    </div>
-  </section>
-
-  <section>
-    <h2>Temperature and humidity</h2>
     <div id="readings" class="chart"></div>
-    <p class="note">Vertical marks are setpoint, mode, away and eco changes; drag across a chart to zoom, double-click to reset.</p>
+    <div id="legend" class="legend"></div>
+    <div id="readout" class="readout"></div>
+    <div class="controls">
+      <div class="row"><span class="label">Thermostats</span><span id="devices" class="row" style="margin:0"></span></div>
+      <div class="row"><span class="label">Range</span>
+        <span id="presets"></span>
+        <label>From <input type="datetime-local" id="from"></label>
+        <label>To <input type="datetime-local" id="to"></label>
+        <button id="apply">Show</button>
+      </div>
+      <div class="row"><span class="label">Unit</span><select id="unit"><option value="C">°C</option><option value="F">°F</option></select></div>
+    </div>
   </section>
 
   <section>
@@ -82,16 +88,6 @@
   <section>
     <h2>Changes</h2>
     <div class="scroll"><table><thead><tr><th>Time</th><th>Thermostat</th><th>Change</th><th>By</th></tr></thead><tbody id="events"></tbody></table></div>
-  </section>
-
-  <section>
-    <h2>Download</h2>
-    <div class="row">
-      <span class="label">Shown range</span>
-      <button data-export="samples:csv">Readings CSV</button><button data-export="samples:xlsx">Readings Excel</button>
-      <button data-export="events:csv">Changes CSV</button><button data-export="events:xlsx">Changes Excel</button>
-      <button data-export="daily:csv">Daily summary CSV</button><button data-export="daily:xlsx">Daily summary Excel</button>
-    </div>
   </section>
 
   <section>
@@ -117,10 +113,10 @@
     <p class="note">Per degree day: heating hours divided by how much colder than 18 °C the days were on average, so years with different weather can be compared. Periods with little heating or cooling demand are left out.</p>
   </section>
 
-  <section>
-    <h2>Recording</h2>
+  <dialog id="settingsDialog">
+    <div class="dialog-head"><h2>Recording settings</h2><button class="btn-icon" id="closeSettings" aria-label="Close">&times;</button></div>
     <div class="stats" id="stats"></div>
-    <form id="settings" style="margin-top:12px">
+    <form id="settings">
       <div class="row"><span class="label">Record</span>
         <select name="mode">
           <option value="both">Every interval, plus changes at once</option>
@@ -144,7 +140,20 @@
       <div class="row"><span class="label">Thermostats</span><span id="recordDevices" class="row" style="margin:0"></span></div>
       <div class="row"><button class="primary">Save</button><span id="settingsMsg" class="muted"></span></div>
     </form>
-  </section>
+    <h2>Download</h2>
+    <div class="row">
+      <select id="download">
+        <option value="samples:csv">Readings (CSV)</option>
+        <option value="samples:xlsx">Readings (Excel)</option>
+        <option value="events:csv">Changes (CSV)</option>
+        <option value="events:xlsx">Changes (Excel)</option>
+        <option value="daily:csv">Daily summary (CSV)</option>
+        <option value="daily:xlsx">Daily summary (Excel)</option>
+      </select>
+      <button class="primary" id="downloadButton">Download</button>
+    </div>
+    <p class="note">For the thermostats, range and unit currently shown on the page.</p>
+  </dialog>
 
   <script src="static/uplot/uPlot.iife.min.js"></script>
   <script>
@@ -153,12 +162,16 @@
     const $ = id => document.getElementById(id);
     const COLORS = ['#0EA5E9', '#F97316', '#22C55E', '#A855F7', '#EF4444', '#EAB308'];
     const EQUIPMENT = [
-      ['heat', 'Heating', ['heat', 'heat2', 'heat3', 'aux_heat', 'alt_heat', 'emer_heat']],
-      ['cool', 'Cooling', ['cool', 'cool2', 'cool3']],
-      ['fan', 'Fan', ['fan']],
-      ['humidifier', 'Humidifier', ['humidifier']],
-      ['dehumidifier', 'Dehumidifier', ['dehumidifier', 'auto_dehum']],
+      ['heat', 'Heating', ['heat', 'heat2', 'heat3', 'aux_heat', 'alt_heat', 'emer_heat'], '#EF4444'],
+      ['cool', 'Cooling', ['cool', 'cool2', 'cool3'], '#38BDF8'],
+      ['fan', 'Fan', ['fan'], '#94A3B8'],
+      ['humidifier', 'Humidifier', ['humidifier'], '#22C55E'],
+      ['dehumidifier', 'Dehumidifier', ['dehumidifier', 'auto_dehum'], '#A855F7'],
     ];
+    // Each reading has its own color; thermostats differ by line style
+    const PROPS = [['temp', 'Temperature', '#F97316'], ['target', 'Setpoint', '#EAB308'], ['humidity', 'Humidity', '#0EA5E9'], ['outdoor', 'Outdoor', '#A855F7'], ['events', 'Changes', '#94A3B8', [3, 3]]];
+    const PROP_COLOR = Object.fromEntries(PROPS.map(p => [p[0], p[2]]));
+    const DASHES = [null, [8, 4], [2, 3], [12, 3, 2, 3]];
     const FIELD = {target: 'Setpoint', target_low: 'Low setpoint', target_high: 'High setpoint', mode: 'Mode', away: 'Away', eco: 'Eco'};
     const SOURCE = {thermostat: ['Thermostat', '#94a3b8'], dashboard: ['Dashboard', '#0EA5E9'], home_assistant: ['Home Assistant', '#22C55E'], mqtt: ['MQTT', '#A855F7']};
     const PRESETS = [['24 h', 1], ['7 days', 7], ['30 days', 30], ['90 days', 90]];
@@ -223,30 +236,77 @@
       return tables.length === 1 ? tables[0] : uPlot.join(tables);
     }
 
+    function line(hue, dash) {
+      return `<svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke="${hue}" stroke-width="2.5"${dash ? ` stroke-dasharray="${dash.join(' ')}"` : ''}/></svg>`;
+    }
+
+    function renderLegend(serials) {
+      const chips = PROPS.map(([key, label, hue, dash]) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip' + (state.show.has(key) ? '' : ' off');
+        chip.title = 'Show or hide';
+        chip.innerHTML = line(hue, dash);
+        chip.append(label);
+        chip.onclick = () => {
+          state.show.has(key) ? state.show.delete(key) : state.show.add(key);
+          if (state.last) drawReadings(...state.last);
+        };
+        return chip;
+      });
+      const keys = serials.length > 1 ? serials.map((s, i) => {
+        const key = document.createElement('span');
+        key.className = 'chip key';
+        key.innerHTML = line(css('--text2'), DASHES[i % DASHES.length]);
+        key.append(name(s));
+        return key;
+      }) : [];
+      $('legend').replaceChildren(...chips, ...keys);
+    }
+
     function drawReadings(serials, data, events, from, to) {
+      state.last = [serials, data, events, from, to];
+      renderLegend(serials);
+      $('readout').textContent = '';
       if (!serials.some(s => data[s].ts.length)) return empty('readings', $('readings'), 'No data recorded in this range yet.');
       const series = [{}];
+      const meta = [];
       const columns = (s, d) => {
         const cols = [];
-        const add = (key, label, values, scale, dash) => {
+        const dash = DASHES[serials.indexOf(s) % DASHES.length];
+        const add = (key, label, values, scale) => {
           if (!state.show.has(key) || !values.some(v => v != null)) return;
           cols.push(values);
-          series.push({label: `${name(s)} ${label}`, stroke: color(s), width: key === 'temp' ? 2 : 1.5, dash, scale,
-            value: (u, v) => v == null ? '–' : scale === '%' ? v.toFixed(0) + ' %' : v.toFixed(1) + ' ' + deg()});
+          meta.push({serial: s, label, scale});
+          series.push({label: `${name(s)} ${label}`, stroke: PROP_COLOR[key], width: key === 'temp' ? 2.5 : 1.5, dash: dash || undefined, scale});
         };
         add('temp', 'temperature', d.temp.map(toUnit), 'temp');
-        add('target', 'setpoint', d.target.map(toUnit), 'temp', [6, 4]);
-        add('target', 'low setpoint', d.target_low.map(toUnit), 'temp', [6, 4]);
-        add('target', 'high setpoint', d.target_high.map(toUnit), 'temp', [6, 4]);
-        add('humidity', 'humidity', d.humidity, '%', [2, 3]);
-        add('outdoor', 'outdoor', d.outdoor.map(toUnit), 'temp', [1, 4]);
+        add('target', 'setpoint', d.target.map(toUnit), 'temp');
+        add('target', 'low setpoint', d.target_low.map(toUnit), 'temp');
+        add('target', 'high setpoint', d.target_high.map(toUnit), 'temp');
+        add('humidity', 'humidity', d.humidity, '%');
+        add('outdoor', 'outdoor', d.outdoor.map(toUnit), 'temp');
         return cols;
       };
       const plotData = joined(serials, data, columns);
       if (series.length === 1) return empty('readings', $('readings'), 'Nothing selected to show.');
       const marks = state.show.has('events') ? events : [];
+      const readout = u => {
+        const i = u.cursor.idx;
+        if (i == null) { $('readout').textContent = ''; return; }
+        const parts = new Map();
+        meta.forEach((m, k) => {
+          const v = u.data[k + 1][i];
+          if (v == null) return;
+          if (!parts.has(m.serial)) parts.set(m.serial, []);
+          parts.get(m.serial).push(`${m.label} ${m.scale === '%' ? v.toFixed(0) + ' %' : v.toFixed(1) + ' ' + deg()}`);
+        });
+        $('readout').textContent = [new Date(u.data[0][i] * 1000).toLocaleString(),
+          ...[...parts].map(([s, t]) => (serials.length > 1 ? name(s) + ': ' : '') + t.join(', '))].join(' · ');
+      };
       place('readings', $('readings'), {
         height: 320,
+        legend: {show: false},
         cursor: {sync: {key: 'history'}},
         scales: {x: {min: from / 1000, max: to / 1000}, '%': {range: [0, 100]}},
         series: series.map(s => ({spanGaps: true, ...s})),
@@ -266,6 +326,7 @@
             ctx.restore();
           }],
           setScale: [syncZoom('readings')],
+          setCursor: [readout],
         },
       }, plotData);
     }
@@ -273,12 +334,11 @@
     function drawEquipment(serials, data, from, to) {
       const lanes = [];
       const series = [{}];
-      const columns = (s, d) => serials.length && EQUIPMENT.flatMap(([key, label, fields], i) => {
+      const columns = (s, d) => serials.length && EQUIPMENT.flatMap(([, label, fields, hue]) => {
         const values = d.ts.map((_, j) => Math.max(...fields.map(f => d[f][j] || 0)));
         if (!values.some(v => v > 0)) return [];
         const lane = lanes.length;
         lanes.push(serials.length > 1 ? `${name(s)}: ${label}` : label);
-        const hue = serials.length > 1 ? color(s) : COLORS[[4, 0, 2, 3, 5][i]];
         series.push({label: lanes[lane], stroke: hue, fill: hue + '88', fillTo: lane, width: 1, points: {show: false},
           paths: uPlot.paths.stepped({align: 1}), value: (u, v) => v == null ? '–' : Math.round((v - lane) / 0.8 * 100) + '%'});
         return [values.map(v => lane + v * 0.8)];
@@ -463,8 +523,7 @@
         const box = document.createElement('input');
         box.type = 'checkbox'; box.checked = state.selected.has(d.serial);
         box.onchange = () => { box.checked ? state.selected.add(d.serial) : state.selected.delete(d.serial); refresh(); };
-        const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = color(d.serial);
-        label.append(box, sw, ' ' + d.name);
+        label.append(box, ' ' + d.name);
         return label;
       }));
       if (!state.devices.length) $('devices').textContent = 'No thermostats yet.';
@@ -490,15 +549,21 @@
       renderControls(); refresh();
     };
     $('unit').onchange = () => { state.unit = $('unit').value; refresh(); };
-    for (const box of document.querySelectorAll('[data-show]')) box.onchange = () => { box.checked ? state.show.add(box.dataset.show) : state.show.delete(box.dataset.show); loadDetail(); };
     for (const id of ['metric', 'group', 'years', 'compare']) $(id).onchange = () => loadDaily();
-    for (const b of document.querySelectorAll('[data-export]')) b.onclick = () => {
+    $('downloadButton').onclick = () => {
       const serials = selected();
       if (!serials.length) return;
-      const [kind, format] = b.dataset.export.split(':');
+      const [kind, format] = $('download').value.split(':');
       const [from, to] = range();
       location.href = `${BASE}/api/history/export?serials=${serials.join(',')}&kind=${kind}&format=${format}&unit=${state.unit}&from=${Math.round(from)}&to=${Math.round(to)}`;
     };
+    $('openSettings').onclick = async () => {
+      $('settingsMsg').textContent = '';
+      $('settingsDialog').showModal();
+      await loadSettings();
+    };
+    $('closeSettings').onclick = () => $('settingsDialog').close();
+    $('settingsDialog').addEventListener('click', e => { if (e.target === $('settingsDialog')) $('settingsDialog').close(); });
     let resizeTimer;
     window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { for (const [k, c] of Object.entries(charts)) c.setSize({width: $(k).clientWidth, height: c.height}); }, 150); });
     setInterval(() => { if (state.days && !document.hidden) loadDetail().catch(console.error); }, 60000);
@@ -509,7 +574,7 @@
       state.unit = (state.devices[0] || {}).scale === 'F' ? 'F' : 'C';
       try { $('zones').replaceChildren(...Intl.supportedValuesOf('timeZone').map(z => Object.assign(document.createElement('option'), {value: z}))); } catch {}
       renderControls();
-      await Promise.all([refresh(), loadSettings()]);
+      await refresh();
     })();
   })();
   </script>
