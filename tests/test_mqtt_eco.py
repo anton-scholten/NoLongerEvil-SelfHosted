@@ -39,6 +39,7 @@ def make_integration(structure_values: dict[str, Any] | None = None) -> MqttInte
         ),
     }
     state_service = MagicMock()
+    state_service.storage.get_user_weather = AsyncMock(return_value=None)
     state_service.get_object.side_effect = lambda _serial, key: objects.get(key)
     state_service.get_objects_by_serial.return_value = (
         [SimpleNamespace(object_key="structure.home", value=structure_values)]
