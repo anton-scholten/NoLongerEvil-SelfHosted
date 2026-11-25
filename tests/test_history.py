@@ -227,3 +227,12 @@ async def test_settings_api(client):
     assert (await r.json())["interval_s"] == 120
     status = await (await client.get("/api/history/status")).json()
     assert status["samples"] == 0 and status["size_bytes"] > 0
+
+
+async def test_csv_export_in_kelvin_and_bad_unit(client, history, clock):
+    await insert(history, [(int(clock.now * 1000) - 1000, 20.0, 0)])
+    r = await client.get(f"/api/history/export?serials={SERIAL}&format=csv&unit=K&from=0")
+    rows = list(csv.DictReader(io.StringIO(await r.text())))
+    assert float(rows[0]["temp_k"]) == pytest.approx(293.15)
+    r = await client.get(f"/api/history/export?serials={SERIAL}&format=csv&unit=X&from=0")
+    assert r.status == 400

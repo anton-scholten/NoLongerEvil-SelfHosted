@@ -24,13 +24,21 @@
     .chip.off { opacity: .4; }
     .chip.key { cursor: default; background: none; border-color: transparent; color: var(--text2); }
     .readout { font-size: 12px; color: var(--text2); min-height: 1.4em; margin-top: 6px; }
+    .plotwrap { position: relative; }
+    .axis-unit { position: absolute; top: 0; z-index: 2; font-size: 12px; color: var(--text2); }
+    .axis-unit.left { left: 4px; padding: 1px 2px; border: none; background: none; cursor: pointer; text-decoration: underline dotted; }
+    .axis-unit.right { right: 4px; }
     .controls { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
     dialog { margin: auto; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: min(760px, 94vw); max-height: 90vh; }
     dialog::backdrop { background: rgba(15, 23, 42, .55); }
-    dialog h2 { margin-top: 14px; }
-    .dialog-head { display: flex; justify-content: space-between; align-items: center; }
-    .dialog-head h2 { margin: 0; }
-    #settings { margin-top: 12px; }
+    dialog { position: relative; overscroll-behavior: contain; }
+    dialog .close { position: absolute; top: 8px; right: 8px; }
+    dialog .row > span.label { min-width: 140px; }
+    .indent { margin: -2px 0 10px 154px; }
+    .facts { font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
+    .facts b { font-weight: 600; }
+    .locked { overflow: hidden; }
+    #settings { margin-top: 4px; }
     a { color: var(--accent); }
     section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
     h2 { font-size: 15px; margin-bottom: 10px; }
@@ -50,9 +58,6 @@
     th { color: var(--text2); font-weight: 600; }
     .scroll { max-height: 280px; overflow: auto; }
     .error { color: var(--error); font-size: 13px; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; font-size: 13px; }
-    .stats div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
-    .stats b { display: block; font-size: 15px; }
     .uplot, .u-legend { color: var(--text); font-family: inherit; }
     .u-legend { font-size: 12px; }
   </style>
@@ -64,18 +69,30 @@
   </header>
 
   <section>
-    <div id="readings" class="chart"></div>
+    <div class="plotwrap">
+      <select id="unit" class="axis-unit left" title="Temperature unit" aria-label="Temperature unit">
+        <option value="C">°C</option><option value="F">°F</option><option value="K">K</option>
+      </select>
+      <span id="humidityUnit" class="axis-unit right">RH %</span>
+      <div id="readings" class="chart"></div>
+    </div>
     <div id="legend" class="legend"></div>
     <div id="readout" class="readout"></div>
     <div class="controls">
-      <div class="row"><span class="label">Thermostats</span><span id="devices" class="row" style="margin:0"></span></div>
+      <div class="row" id="deviceRow"><span class="label">Thermostats</span><span id="devices" class="row" style="margin:0"></span></div>
       <div class="row"><span class="label">Range</span>
-        <span id="presets"></span>
-        <label>From <input type="datetime-local" id="from"></label>
-        <label>To <input type="datetime-local" id="to"></label>
-        <button id="apply">Show</button>
+        <select id="rangeSelect">
+          <option value="15">Last 15 minutes</option>
+          <option value="60">Last hour</option>
+          <option value="300">Last 5 hours</option>
+          <option value="1440">Last 24 hours</option>
+          <option value="10080">Last 7 days</option>
+          <option value="43200">Last 30 days</option>
+          <option value="129600">Last 90 days</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <span id="customRange" hidden><input type="datetime-local" id="from"> – <input type="datetime-local" id="to"> <button id="apply">Show</button></span>
       </div>
-      <div class="row"><span class="label">Unit</span><select id="unit"><option value="C">°C</option><option value="F">°F</option></select></div>
     </div>
   </section>
 
@@ -113,19 +130,21 @@
     <p class="note">Per degree day: heating hours divided by how much colder than 18 °C the days were on average, so years with different weather can be compared. Periods with little heating or cooling demand are left out.</p>
   </section>
 
-  <dialog id="settingsDialog">
-    <div class="dialog-head"><h2>Recording settings</h2><button class="btn-icon" id="closeSettings" aria-label="Close">&times;</button></div>
-    <div class="stats" id="stats"></div>
+  <dialog id="settingsDialog" aria-label="Recording settings">
+    <button class="btn-icon close" id="closeSettings" aria-label="Close">&times;</button>
+    <div class="facts" id="stats"></div>
     <form id="settings">
       <div class="row"><span class="label">Record</span>
         <select name="mode">
-          <option value="both">Every interval, plus changes at once</option>
-          <option value="interval">Every interval only</option>
-          <option value="changes">Only when something changes</option>
+          <option value="both">At each interval and on updates</option>
+          <option value="interval">At each interval</option>
+          <option value="changes">Only on updates</option>
         </select>
-        <label>every <input type="number" name="interval_s" min="10" step="1"> s</label>
       </div>
-      <div class="row" id="changeOptions"><span class="label">Changes</span>
+      <div class="row" id="intervalRow"><span class="label">Recording interval</span>
+        <label><input type="number" name="interval_s" min="10" step="1"> s</label>
+      </div>
+      <div class="row" id="updateRow"><span class="label">Updates</span>
         <label>temperature ≥ <input type="number" name="temp_step" min="0" max="5" step="0.05"> °C</label>
         <label>humidity ≥ <input type="number" name="humidity_step" min="0" max="20" step="0.5"> %</label>
         <label>at least every <input type="number" name="keepalive_s" min="60" step="1"> s</label>
@@ -134,14 +153,13 @@
         <select name="retention"><option value="days">The last</option><option value="size">Up to</option></select>
         <label><input type="number" name="retention_days" min="1" max="3650"> days</label>
         <label><input type="number" name="retention_mb" min="1" max="100000"> MB</label>
-        <span class="muted">Daily summaries are always kept.</span>
       </div>
-      <div class="row"><span class="label">Time zone</span><input name="timezone" list="zones" style="width:220px"><datalist id="zones"></datalist></div>
-      <div class="row"><span class="label">Thermostats</span><span id="recordDevices" class="row" style="margin:0"></span></div>
-      <div class="row"><button class="primary">Save</button><span id="settingsMsg" class="muted"></span></div>
+      <p class="muted indent">(Daily summaries are always kept)</p>
+      <div class="row"><span class="label">Time zone</span><select name="timezone" id="timezone"></select></div>
+      <div class="row" id="recordRow"><span class="label">Thermostats</span><span id="recordDevices" class="row" style="margin:0"></span></div>
+      <p id="settingsMsg" class="muted indent"></p>
     </form>
-    <h2>Download</h2>
-    <div class="row">
+    <div class="row"><span class="label">Download</span>
       <select id="download">
         <option value="samples:csv">Readings (CSV)</option>
         <option value="samples:xlsx">Readings (Excel)</option>
@@ -152,7 +170,7 @@
       </select>
       <button class="primary" id="downloadButton">Download</button>
     </div>
-    <p class="note">For the thermostats, range and unit currently shown on the page.</p>
+    <p class="note indent">For the thermostats, range and unit shown on the page.</p>
   </dialog>
 
   <script src="static/uplot/uPlot.iife.min.js"></script>
@@ -169,15 +187,15 @@
       ['dehumidifier', 'Dehumidifier', ['dehumidifier', 'auto_dehum'], '#A855F7'],
     ];
     // Each reading has its own color; thermostats differ by line style
-    const PROPS = [['temp', 'Temperature', '#F97316'], ['target', 'Setpoint', '#EAB308'], ['humidity', 'Humidity', '#0EA5E9'], ['outdoor', 'Outdoor', '#A855F7'], ['events', 'Changes', '#94A3B8', [3, 3]]];
+    const PROPS = [['temp', 'Temperature', '#F97316'], ['heat_set', 'Heat setpoint', '#EF4444'], ['cool_set', 'Cool setpoint', '#38BDF8'], ['humidity', 'Humidity', '#14B8A6'], ['outdoor', 'Outdoor', '#A855F7'], ['events', 'Changes', '#94A3B8', [3, 3]]];
+    const UNITS = {C: '°C', F: '°F', K: 'K'};
     const PROP_COLOR = Object.fromEntries(PROPS.map(p => [p[0], p[2]]));
     const DASHES = [null, [8, 4], [2, 3], [12, 3, 2, 3]];
     const FIELD = {target: 'Setpoint', target_low: 'Low setpoint', target_high: 'High setpoint', mode: 'Mode', away: 'Away', eco: 'Eco'};
     const SOURCE = {thermostat: ['Thermostat', '#94a3b8'], dashboard: ['Dashboard', '#0EA5E9'], home_assistant: ['Home Assistant', '#22C55E'], mqtt: ['MQTT', '#A855F7']};
-    const PRESETS = [['24 h', 1], ['7 days', 7], ['30 days', 30], ['90 days', 90]];
     const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
-    const state = {devices: [], selected: new Set(), days: 1, from: null, to: null, unit: 'C', show: new Set(['temp', 'target', 'humidity', 'outdoor', 'events']), settings: null};
+    const state = {devices: [], selected: new Set(), minutes: 1440, from: null, to: null, unit: 'C', show: new Set(['temp', 'heat_set', 'cool_set', 'humidity', 'outdoor', 'events']), settings: null};
     const charts = {};
 
     async function api(path, options) {
@@ -187,11 +205,12 @@
       if (!r.ok) throw new Error(data.error || 'Request failed');
       return data;
     }
-    const toUnit = c => c == null ? null : state.unit === 'F' ? c * 9 / 5 + 32 : c;
-    const deg = () => state.unit === 'F' ? '°F' : '°C';
+    const toUnit = c => c == null ? null : state.unit === 'F' ? c * 9 / 5 + 32 : state.unit === 'K' ? c + 273.15 : c;
+    const deg = () => UNITS[state.unit];
+    const perDegree = dd => state.unit === 'F' ? dd * 1.8 : dd;  // Degree days in the shown unit
     const name = serial => (state.devices.find(d => d.serial === serial) || {}).name || serial;
     const color = serial => COLORS[state.devices.findIndex(d => d.serial === serial) % COLORS.length];
-    const range = () => state.days ? [Date.now() - state.days * 86400000, Date.now()] : [state.from, state.to];
+    const range = () => state.minutes ? [Date.now() - state.minutes * 60000, Date.now()] : [state.from, state.to];
     const selected = () => state.devices.map(d => d.serial).filter(s => state.selected.has(s));
     const localInput = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -240,8 +259,8 @@
       return `<svg width="22" height="8" aria-hidden="true"><line x1="1" y1="4" x2="21" y2="4" stroke="${hue}" stroke-width="2.5"${dash ? ` stroke-dasharray="${dash.join(' ')}"` : ''}/></svg>`;
     }
 
-    function renderLegend(serials) {
-      const chips = PROPS.map(([key, label, hue, dash]) => {
+    function renderLegend(serials, present) {
+      const chips = PROPS.filter(([key]) => present.has(key)).map(([key, label, hue, dash]) => {
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'chip' + (state.show.has(key) ? '' : ' off');
@@ -266,29 +285,39 @@
 
     function drawReadings(serials, data, events, from, to) {
       state.last = [serials, data, events, from, to];
-      renderLegend(serials);
       $('readout').textContent = '';
-      if (!serials.some(s => data[s].ts.length)) return empty('readings', $('readings'), 'No data recorded in this range yet.');
+      const present = new Set(['events']);
+      if (!serials.some(s => data[s].ts.length)) {
+        renderLegend(serials, present);
+        $('humidityUnit').hidden = true;
+        return empty('readings', $('readings'), 'No data recorded in this range yet.');
+      }
       const series = [{}];
       const meta = [];
       const columns = (s, d) => {
         const cols = [];
         const dash = DASHES[serials.indexOf(s) % DASHES.length];
         const add = (key, label, values, scale) => {
-          if (!state.show.has(key) || !values.some(v => v != null)) return;
+          if (!values.some(v => v != null)) return;
+          present.add(key);
+          if (!state.show.has(key)) return;
           cols.push(values);
           meta.push({serial: s, label, scale});
           series.push({label: `${name(s)} ${label}`, stroke: PROP_COLOR[key], width: key === 'temp' ? 2.5 : 1.5, dash: dash || undefined, scale});
         };
         add('temp', 'temperature', d.temp.map(toUnit), 'temp');
-        add('target', 'setpoint', d.target.map(toUnit), 'temp');
-        add('target', 'low setpoint', d.target_low.map(toUnit), 'temp');
-        add('target', 'high setpoint', d.target_high.map(toUnit), 'temp');
+        // A setpoint is a heat or cool setpoint depending on the mode at that time
+        const heatSet = d.mode.map((m, i) => m === 'range' ? d.target_low[i] : m === 'heat' || m === 'emergency' ? d.target[i] : null);
+        const coolSet = d.mode.map((m, i) => m === 'range' ? d.target_high[i] : m === 'cool' ? d.target[i] : null);
+        add('heat_set', 'heat setpoint', heatSet.map(toUnit), 'temp');
+        add('cool_set', 'cool setpoint', coolSet.map(toUnit), 'temp');
         add('humidity', 'humidity', d.humidity, '%');
         add('outdoor', 'outdoor', d.outdoor.map(toUnit), 'temp');
         return cols;
       };
       const plotData = joined(serials, data, columns);
+      renderLegend(serials, present);
+      $('humidityUnit').hidden = !(present.has('humidity') && state.show.has('humidity'));
       if (series.length === 1) return empty('readings', $('readings'), 'Nothing selected to show.');
       const marks = state.show.has('events') ? events : [];
       const readout = u => {
@@ -306,11 +335,12 @@
       };
       place('readings', $('readings'), {
         height: 320,
+        padding: [32, null, null, null],  // Room for the unit labels above the axes
         legend: {show: false},
         cursor: {sync: {key: 'history'}},
         scales: {x: {min: from / 1000, max: to / 1000}, '%': {range: [0, 100]}},
         series: series.map(s => ({spanGaps: true, ...s})),
-        axes: [axis({}), axis({scale: 'temp', values: (u, v) => v.map(x => x + '°')}), axis({scale: '%', side: 1, grid: {show: false}, values: (u, v) => v.map(x => x + '%')})],
+        axes: [axis({}), axis({scale: 'temp'}), axis({scale: '%', side: 1, grid: {show: false}})],
         hooks: {
           draw: [u => {
             const ctx = u.ctx;
@@ -405,8 +435,8 @@
       const value = p => ({
         heat: p.heat_s / 3600, cool: p.cool_s / 3600, fan: p.fan_s / 3600,
         humidifier: p.humidifier_s / 3600, dehumidifier: p.dehumidifier_s / 3600,
-        heat_per_hdd: p.hdd >= p.n ? p.heat_s / 3600 / (state.unit === 'F' ? p.hdd * 1.8 : p.hdd) : null,
-        cool_per_cdd: p.cdd >= p.n ? p.cool_s / 3600 / (state.unit === 'F' ? p.cdd * 1.8 : p.cdd) : null,
+        heat_per_hdd: p.hdd >= p.n ? p.heat_s / 3600 / perDegree(p.hdd) : null,
+        cool_per_cdd: p.cdd >= p.n ? p.cool_s / 3600 / perDegree(p.cdd) : null,
         temp_avg: toUnit(avg(p.temp)), humidity_avg: avg(p.humidity), outdoor_avg: toUnit(avg(p.outdoor)),
       })[metric];
       return [...periods.entries()].sort((a, b) => a[0] - b[0]).map(([t, p]) => [t, value(p)]);
@@ -421,7 +451,7 @@
       const rows = await api(`/api/history/daily?serials=${serials.join(',')}&from=${from}`);
       const metric = $('metric').value, group = $('group').value, compare = $('compare').checked;
       const isHours = !metric.endsWith('_avg');
-      const unitLabel = metric === 'humidity_avg' ? '%' : metric.endsWith('_avg') ? deg() : metric.includes('per') ? 'h/' + (state.unit === 'F' ? '°F·day' : '°C·day') : 'h';
+      const unitLabel = metric === 'humidity_avg' ? '%' : metric.endsWith('_avg') ? deg() : metric.includes('per') ? 'h/' + deg() + '·day' : 'h';
       const series = [{}];
       const tables = [];
       const period = {day: 86400, week: 7 * 86400, month: 30 * 86400}[group];
@@ -466,10 +496,45 @@
 
     // Settings and storage
 
+    function zoneOptions(current) {
+      let zones = [];
+      try { zones = Intl.supportedValuesOf('timeZone'); } catch {}
+      for (const z of ['UTC', current]) if (z && !zones.includes(z)) zones.unshift(z);
+      const now = new Date();
+      const offset = z => {
+        try {
+          const part = new Intl.DateTimeFormat('en-US', {timeZone: z, timeZoneName: 'longOffset'}).formatToParts(now).find(p => p.type === 'timeZoneName').value;
+          return part === 'GMT' ? 'UTC+00:00' : part.replace('GMT', 'UTC');
+        } catch { return 'UTC'; }
+      };
+      const minutes = o => { const m = /([+-])(\d+):(\d+)/.exec(o); return m ? (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]) : 0; };
+      return zones.map(z => [z, offset(z)])
+        .sort((a, b) => minutes(a[1]) - minutes(b[1]) || a[0].localeCompare(b[0]))
+        .map(([z, o]) => Object.assign(document.createElement('option'), {value: z, textContent: `(${o}) ${z.replaceAll('_', ' ')}`}));
+    }
+
+    async function loadStats() {
+      const st = await api('/api/history/status');
+      const mb = b => (b / 1e6).toFixed(b < 1e7 ? 2 : 0) + ' MB';
+      const facts = [
+        ['Size', mb(st.size_bytes) + (st.limit_bytes ? ' of ' + mb(st.limit_bytes) : '')],
+        ['Number of readings', st.samples.toLocaleString()],
+        ['Oldest', st.oldest ? new Date(st.oldest).toLocaleString() : '–'],
+      ];
+      $('stats').replaceChildren(...facts.map(([k, v]) => {
+        const line = document.createElement('div');
+        const b = document.createElement('b');
+        b.textContent = k + ': ';
+        line.append(b, v);
+        return line;
+      }));
+    }
+
     async function loadSettings() {
       const s = state.settings = await api('/api/history/settings');
-      const form = $('settings');
-      for (const el of form.elements) if (el.name && s[el.name] !== undefined) el.value = s[el.name];
+      const f = $('settings').elements;
+      if (!$('timezone').options.length || ![...$('timezone').options].some(o => o.value === s.timezone)) $('timezone').replaceChildren(...zoneOptions(s.timezone));
+      for (const el of f) if (el.name && s[el.name] !== undefined) el.value = s[el.name];
       $('recordDevices').replaceChildren(...state.devices.map(d => {
         const label = document.createElement('label');
         const box = document.createElement('input');
@@ -478,42 +543,37 @@
         return label;
       }));
       updateForm();
-      const st = await api('/api/history/status');
-      const mb = b => (b / 1e6).toFixed(b < 1e7 ? 2 : 0) + ' MB';
-      const stats = [
-        ['Size', mb(st.size_bytes) + (st.limit_bytes ? ' of ' + mb(st.limit_bytes) : '')],
-        ['Rows', st.samples.toLocaleString() + ' readings · ' + st.events.toLocaleString() + ' changes'],
-        ['Oldest', st.oldest ? new Date(st.oldest).toLocaleString() : '–'],
-        ['Growth', st.bytes_per_day ? mb(st.bytes_per_day) + ' per day' : 'measuring…'],
-        ['Room left', st.days_until_full != null ? Math.max(0, Math.floor(st.days_until_full)) + ' days' : s.retention === 'days' ? 'keeps ' + s.retention_days + ' days' : '–'],
-        ['Daily summaries', st.daily_rows.toLocaleString() + ' days'],
-      ];
-      $('stats').replaceChildren(...stats.map(([k, v]) => { const d = document.createElement('div'); d.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(b); return d; }));
+      await loadStats();
     }
 
     function updateForm() {
       const f = $('settings').elements;
-      $('changeOptions').hidden = f.mode.value !== 'changes';
-      f.interval_s.parentElement.hidden = f.mode.value === 'changes';
+      $('intervalRow').hidden = f.mode.value === 'changes';
+      $('updateRow').hidden = f.mode.value !== 'changes';
       f.retention_days.parentElement.hidden = f.retention.value !== 'days';
       f.retention_mb.parentElement.hidden = f.retention.value !== 'size';
     }
 
-    $('settings').addEventListener('change', updateForm);
-    $('settings').addEventListener('submit', async e => {
-      e.preventDefault();
-      const f = e.target.elements;
+    // Settings save as they are edited, and once more when the window closes
+    let dirty = false;
+    async function saveSettings() {
+      if (!dirty) return;
+      dirty = false;
+      const f = $('settings').elements;
       const body = {mode: f.mode.value, retention: f.retention.value, timezone: f.timezone.value,
         disabled: [...document.querySelectorAll('[data-record]')].filter(b => !b.checked).map(b => b.dataset.record)};
       for (const k of ['interval_s', 'keepalive_s', 'retention_days', 'retention_mb']) body[k] = parseInt(f[k].value, 10);
       for (const k of ['temp_step', 'humidity_step']) body[k] = parseFloat(f[k].value);
       const msg = $('settingsMsg');
       try {
-        await api('/api/history/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-        msg.className = 'muted'; msg.textContent = 'Saved.';
-        loadSettings();
-      } catch (err) { msg.className = 'error'; msg.textContent = err.message; }
-    });
+        state.settings = await api('/api/history/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        msg.className = 'muted indent'; msg.textContent = 'Saved.';
+        loadStats();
+      } catch (err) { msg.className = 'error indent'; msg.textContent = err.message; }
+    }
+    $('settings').addEventListener('input', () => { dirty = true; });
+    $('settings').addEventListener('change', () => { dirty = true; updateForm(); saveSettings(); });
+    $('settings').addEventListener('submit', e => { e.preventDefault(); saveSettings(); });
 
     // Controls
 
@@ -526,13 +586,9 @@
         label.append(box, ' ' + d.name);
         return label;
       }));
-      if (!state.devices.length) $('devices').textContent = 'No thermostats yet.';
-      $('presets').replaceChildren(...PRESETS.map(([label, days]) => {
-        const b = document.createElement('button');
-        b.textContent = label; b.className = state.days === days ? 'on' : '';
-        b.onclick = () => { state.days = days; renderControls(); refresh(); };
-        return b;
-      }));
+      $('deviceRow').hidden = state.devices.length <= 1;
+      $('rangeSelect').value = state.minutes ? String(state.minutes) : 'custom';
+      $('customRange').hidden = Boolean(state.minutes);
       const [from, to] = range();
       $('from').value = localInput(from); $('to').value = localInput(to);
       $('unit').value = state.unit;
@@ -545,10 +601,20 @@
     $('apply').onclick = () => {
       const from = new Date($('from').value).getTime(), to = new Date($('to').value).getTime();
       if (!(from < to)) return;
-      state.days = 0; state.from = from; state.to = to;
+      state.minutes = 0; state.from = from; state.to = to;
       renderControls(); refresh();
     };
-    $('unit').onchange = () => { state.unit = $('unit').value; refresh(); };
+    $('unit').onchange = () => {
+      state.unit = $('unit').value;
+      try { localStorage.setItem('nle-history-unit', state.unit); } catch {}
+      refresh();
+    };
+    $('rangeSelect').onchange = () => {
+      const v = $('rangeSelect').value;
+      if (v === 'custom') { $('customRange').hidden = false; return; }
+      state.minutes = +v;
+      renderControls(); refresh();
+    };
     for (const id of ['metric', 'group', 'years', 'compare']) $(id).onchange = () => loadDaily();
     $('downloadButton').onclick = () => {
       const serials = selected();
@@ -559,20 +625,28 @@
     };
     $('openSettings').onclick = async () => {
       $('settingsMsg').textContent = '';
+      document.documentElement.classList.add('locked');
+      document.body.classList.add('locked');
       $('settingsDialog').showModal();
       await loadSettings();
     };
+    $('settingsDialog').addEventListener('close', () => {
+      document.documentElement.classList.remove('locked');
+      document.body.classList.remove('locked');
+      saveSettings();
+    });
     $('closeSettings').onclick = () => $('settingsDialog').close();
     $('settingsDialog').addEventListener('click', e => { if (e.target === $('settingsDialog')) $('settingsDialog').close(); });
     let resizeTimer;
     window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { for (const [k, c] of Object.entries(charts)) c.setSize({width: $(k).clientWidth, height: c.height}); }, 150); });
-    setInterval(() => { if (state.days && !document.hidden) loadDetail().catch(console.error); }, 60000);
+    setInterval(() => { if (state.minutes && !document.hidden) loadDetail().catch(console.error); }, 60000);
 
     (async () => {
       state.devices = (await api('/api/devices')).devices.map(d => ({serial: d.serial, name: d.name || d.serial, scale: d.temperature_scale}));
       state.devices.forEach(d => state.selected.add(d.serial));
-      state.unit = (state.devices[0] || {}).scale === 'F' ? 'F' : 'C';
-      try { $('zones').replaceChildren(...Intl.supportedValuesOf('timeZone').map(z => Object.assign(document.createElement('option'), {value: z}))); } catch {}
+      let saved = null;
+      try { saved = localStorage.getItem('nle-history-unit'); } catch {}
+      state.unit = UNITS[saved] ? saved : (state.devices[0] || {}).scale === 'F' ? 'F' : 'C';
       renderControls();
       await refresh();
     })();

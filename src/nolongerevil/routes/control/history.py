@@ -45,10 +45,12 @@ def _range(request: web.Request, default_days: int) -> tuple[list[str], int, int
 
 
 def _export_rows(
-    kind: str, row: tuple[Any, ...], tz: ZoneInfo, fahrenheit: bool, names: dict[str, str]
+    kind: str, row: tuple[Any, ...], tz: ZoneInfo, unit: str, names: dict[str, str]
 ) -> list[Any]:
     def temp(value: Any) -> Any:
-        return round(value * 9 / 5 + 32, 2) if fahrenheit and value is not None else value
+        if value is None or unit == "C":
+            return value
+        return round(value * 9 / 5 + 32 if unit == "F" else value + 273.15, 2)
 
     serial = row[0]
     if kind == "daily":
@@ -56,7 +58,7 @@ def _export_rows(
         for i, col in enumerate(DAILY_COLUMNS):
             if col.startswith(("temp_", "outdoor_")):
                 values[i] = temp(values[i])
-            elif col in ("hdd", "cdd") and fahrenheit and values[i] is not None:
+            elif col in ("hdd", "cdd") and unit == "F" and values[i] is not None:
                 values[i] = round(values[i] * 9 / 5, 2)
             elif col.endswith("_s") and values[i] is not None:
                 values[i] = round(values[i] / 3600, 3)  # Hours
@@ -77,7 +79,7 @@ def _export_rows(
 
 
 def _header(kind: str, unit: str) -> list[str]:
-    deg = "f" if unit == "F" else "c"
+    deg = unit.lower()
     if kind == "daily":
         cols = [
             c.replace("_s", "_hours") if c.endswith("_s")
@@ -115,6 +117,8 @@ def create_history_routes(
         kind = request.query.get("kind", "samples")
         fmt = request.query.get("format", "csv")
         unit = request.query.get("unit", "C").upper()
+        if unit not in ("C", "F", "K"):
+            raise web.HTTPBadRequest(text="unit must be C, F or K")
         if kind not in ("samples", "events", "daily") or fmt not in ("csv", "xlsx"):
             raise web.HTTPBadRequest(text="kind must be samples|events|daily, format csv|xlsx")
         serials, start, end = _range(request, 30)
@@ -133,7 +137,7 @@ def create_history_routes(
             writer = csv.writer(buffer)
             writer.writerow(header)
             async for row in history.rows(kind, serials, start, end):
-                writer.writerow(_export_rows(kind, row, tz, unit == "F", device_names))
+                writer.writerow(_export_rows(kind, row, tz, unit, device_names))
                 if buffer.tell() > 65536:
                     await response.write(buffer.getvalue().encode())
                     buffer.seek(0)
@@ -155,7 +159,7 @@ def create_history_routes(
                     sheet.freeze_panes(1, 0)
                     n = 0
                 n += 1
-                sheet.write_row(n, 0, _export_rows(kind, row, tz, unit == "F", device_names))  # type: ignore[union-attr]
+                sheet.write_row(n, 0, _export_rows(kind, row, tz, unit, device_names))  # type: ignore[union-attr]
             if sheet is None:
                 book.add_worksheet().write_row(0, 0, header, bold)
             book.close()
