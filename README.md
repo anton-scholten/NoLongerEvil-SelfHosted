@@ -48,7 +48,7 @@ docker run -d \
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/codykociemba/NoLongerEvil-SelfHosted.git
+   git clone https://github.com/anton-scholten/NoLongerEvil-SelfHosted.git
    cd NoLongerEvil-SelfHosted
    ```
 
@@ -69,6 +69,15 @@ docker run -d \
 The server will be available at:
 - **Device API**: Port 8000
 - **Control API**: Port 8082
+
+To update later, run these in the same folder. Your `.env`, your own edits to `docker-compose.yml` (such as a different port) and the data volume are kept.
+
+```bash
+git pull --autostash
+```
+```bash
+docker compose up -d --build
+```
 
 ### Using Python Directly
 
