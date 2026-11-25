@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>History · No Longer Evil</title>
+  <link rel="icon" type="image/png" href="nle-favicon.png">
+  <link rel="stylesheet" href="static/uplot/uPlot.min.css">
+  <style>
+    :root { --accent:#0EA5E9; --accent-text:#fff; --bg:#f8fafc; --card:#fff; --text:#0f172a; --text2:#475569; --text3:#94a3b8; --border:#e2e8f0; --grid:#e2e8f0; --error:#dc2626; }
+    @media (prefers-color-scheme: dark) {
+      :root { --accent:#38BDF8; --accent-text:#0f172a; --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --text2:#94a3b8; --text3:#64748b; --border:#334155; --grid:#334155; --error:#f87171; }
+    }
+    * { box-sizing: border-box; margin: 0; }
+    [hidden] { display: none !important; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); max-width: 1100px; margin: 0 auto; padding: 20px 14px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    header h1 { font-size: 22px; }
+    a { color: var(--accent); }
+    section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+    h2 { font-size: 15px; margin-bottom: 10px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; font-size: 14px; }
+    .row > span.label { color: var(--text2); font-size: 13px; min-width: 88px; }
+    label { display: inline-flex; align-items: center; gap: 5px; }
+    button, select, input { font: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+    button { cursor: pointer; }
+    button.on, button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    input[type=checkbox] { padding: 0; }
+    input[type=number] { width: 90px; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+    .note, .muted { font-size: 12px; color: var(--text3); }
+    .chart { width: 100%; min-height: 120px; }
+    .empty { color: var(--text3); font-size: 14px; padding: 30px 0; text-align: center; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--border); }
+    th { color: var(--text2); font-weight: 600; }
+    .scroll { max-height: 280px; overflow: auto; }
+    .error { color: var(--error); font-size: 13px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; font-size: 13px; }
+    .stats div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+    .stats b { display: block; font-size: 15px; }
+    .uplot, .u-legend { color: var(--text); font-family: inherit; }
+    .u-legend { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="./">&larr; Dashboard</a>
+    <h1>History</h1>
+  </header>
+
+  <section>
+    <div class="row"><span class="label">Thermostats</span><span id="devices" class="row" style="margin:0"></span></div>
+    <div class="row"><span class="label">Range</span>
+      <span id="presets"></span>
+      <label>From <input type="datetime-local" id="from"></label>
+      <label>To <input type="datetime-local" id="to"></label>
+      <button id="apply">Show</button>
+    </div>
+    <div class="row"><span class="label">Show</span>
+      <label><input type="checkbox" data-show="temp" checked> Temperature</label>
+      <label><input type="checkbox" data-show="target" checked> Setpoint</label>
+      <label><input type="checkbox" data-show="humidity" checked> Humidity</label>
+      <label><input type="checkbox" data-show="outdoor" checked> Outdoor</label>
+      <label><input type="checkbox" data-show="events" checked> Changes</label>
+      <label>Unit <select id="unit"><option value="C">°C</option><option value="F">°F</option></select></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Temperature and humidity</h2>
+    <div id="readings" class="chart"></div>
+    <p class="note">Vertical marks are setpoint, mode, away and eco changes; drag across a chart to zoom, double-click to reset.</p>
+  </section>
+
+  <section>
+    <h2>Equipment</h2>
+    <div id="equipment" class="chart"></div>
+    <p class="note">Bar height is the share of each time slot the equipment ran.</p>
+  </section>
+
+  <section>
+    <h2>Changes</h2>
+    <div class="scroll"><table><thead><tr><th>Time</th><th>Thermostat</th><th>Change</th><th>By</th></tr></thead><tbody id="events"></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Download</h2>
+    <div class="row">
+      <span class="label">Shown range</span>
+      <button data-export="samples:csv">Readings CSV</button><button data-export="samples:xlsx">Readings Excel</button>
+      <button data-export="events:csv">Changes CSV</button><button data-export="events:xlsx">Changes Excel</button>
+      <button data-export="daily:csv">Daily summary CSV</button><button data-export="daily:xlsx">Daily summary Excel</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Long-term</h2>
+    <div class="row">
+      <select id="metric">
+        <option value="heat">Heating hours</option>
+        <option value="cool">Cooling hours</option>
+        <option value="fan">Fan hours</option>
+        <option value="humidifier">Humidifier hours</option>
+        <option value="dehumidifier">Dehumidifier hours</option>
+        <option value="heat_per_hdd">Heating hours per degree day</option>
+        <option value="cool_per_cdd">Cooling hours per degree day</option>
+        <option value="temp_avg">Average temperature</option>
+        <option value="humidity_avg">Average humidity</option>
+        <option value="outdoor_avg">Average outdoor temperature</option>
+      </select>
+      <select id="group"><option value="day">Per day</option><option value="week" selected>Per week</option><option value="month">Per month</option></select>
+      <select id="years"><option value="1">Past year</option><option value="2" selected>Past 2 years</option><option value="5">Past 5 years</option><option value="0">All</option></select>
+      <label><input type="checkbox" id="compare"> Compare years</label>
+    </div>
+    <div id="daily" class="chart"></div>
+    <p class="note">Per degree day: heating hours divided by how much colder than 18 °C the days were on average, so years with different weather can be compared. Periods with little heating or cooling demand are left out.</p>
+  </section>
+
+  <section>
+    <h2>Recording</h2>
+    <div class="stats" id="stats"></div>
+    <form id="settings" style="margin-top:12px">
+      <div class="row"><span class="label">Record</span>
+        <select name="mode">
+          <option value="both">Every interval, plus changes at once</option>
+          <option value="interval">Every interval only</option>
+          <option value="changes">Only when something changes</option>
+        </select>
+        <label>every <input type="number" name="interval_s" min="10" step="1"> s</label>
+      </div>
+      <div class="row" id="changeOptions"><span class="label">Changes</span>
+        <label>temperature ≥ <input type="number" name="temp_step" min="0" max="5" step="0.05"> °C</label>
+        <label>humidity ≥ <input type="number" name="humidity_step" min="0" max="20" step="0.5"> %</label>
+        <label>at least every <input type="number" name="keepalive_s" min="60" step="1"> s</label>
+      </div>
+      <div class="row"><span class="label">Keep</span>
+        <select name="retention"><option value="days">The last</option><option value="size">Up to</option></select>
+        <label><input type="number" name="retention_days" min="1" max="3650"> days</label>
+        <label><input type="number" name="retention_mb" min="1" max="100000"> MB</label>
+        <span class="muted">Daily summaries are always kept.</span>
+      </div>
+      <div class="row"><span class="label">Time zone</span><input name="timezone" list="zones" style="width:220px"><datalist id="zones"></datalist></div>
+      <div class="row"><span class="label">Thermostats</span><span id="recordDevices" class="row" style="margin:0"></span></div>
+      <div class="row"><button class="primary">Save</button><span id="settingsMsg" class="muted"></span></div>
+    </form>
+  </section>
+
+  <script src="static/uplot/uPlot.iife.min.js"></script>
+  <script>
+  (() => {
+    const BASE = document.body.dataset.ingressPath || '';
+    const $ = id => document.getElementById(id);
+    const COLORS = ['#0EA5E9', '#F97316', '#22C55E', '#A855F7', '#EF4444', '#EAB308'];
+    const EQUIPMENT = [
+      ['heat', 'Heating', ['heat', 'heat2', 'heat3', 'aux_heat', 'alt_heat', 'emer_heat']],
+      ['cool', 'Cooling', ['cool', 'cool2', 'cool3']],
+      ['fan', 'Fan', ['fan']],
+      ['humidifier', 'Humidifier', ['humidifier']],
+      ['dehumidifier', 'Dehumidifier', ['dehumidifier', 'auto_dehum']],
+    ];
+    const FIELD = {target: 'Setpoint', target_low: 'Low setpoint', target_high: 'High setpoint', mode: 'Mode', away: 'Away', eco: 'Eco'};
+    const SOURCE = {thermostat: ['Thermostat', '#94a3b8'], dashboard: ['Dashboard', '#0EA5E9'], home_assistant: ['Home Assistant', '#22C55E'], mqtt: ['MQTT', '#A855F7']};
+    const PRESETS = [['24 h', 1], ['7 days', 7], ['30 days', 30], ['90 days', 90]];
+    const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+    const state = {devices: [], selected: new Set(), days: 1, from: null, to: null, unit: 'C', show: new Set(['temp', 'target', 'humidity', 'outdoor', 'events']), settings: null};
+    const charts = {};
+
+    async function api(path, options) {
+      const r = await fetch(BASE + path, options);
+      if (r.status === 401) { location.href = '/login'; throw new Error('Signed out'); }
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+    const toUnit = c => c == null ? null : state.unit === 'F' ? c * 9 / 5 + 32 : c;
+    const deg = () => state.unit === 'F' ? '°F' : '°C';
+    const name = serial => (state.devices.find(d => d.serial === serial) || {}).name || serial;
+    const color = serial => COLORS[state.devices.findIndex(d => d.serial === serial) % COLORS.length];
+    const range = () => state.days ? [Date.now() - state.days * 86400000, Date.now()] : [state.from, state.to];
+    const selected = () => state.devices.map(d => d.serial).filter(s => state.selected.has(s));
+    const localInput = ms => new Date(ms - new Date(ms).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+    function axis(extra) {
+      return {stroke: css('--text2'), grid: {stroke: css('--grid'), width: 1}, ticks: {stroke: css('--grid'), width: 1}, ...extra};
+    }
+    function place(key, el, opts, data) {
+      if (charts[key]) charts[key].destroy();
+      el.replaceChildren();
+      opts.width = el.clientWidth;
+      charts[key] = new uPlot(opts, data, el);
+    }
+    function empty(key, el, text) {
+      if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+      el.innerHTML = '<div class="empty"></div>';
+      el.firstChild.textContent = text;
+    }
+
+    // Detailed charts
+
+    async function loadDetail() {
+      const serials = selected();
+      const [from, to] = range();
+      if (!serials.length) {
+        empty('readings', $('readings'), 'Pick a thermostat.');
+        empty('equipment', $('equipment'), '');
+        $('events').replaceChildren();
+        return;
+      }
+      const q = `serials=${serials.join(',')}&from=${Math.round(from)}&to=${Math.round(to)}`;
+      const [data, events] = await Promise.all([
+        api(`/api/history?${q}&points=1500`),
+        api(`/api/history/events?${q}`),
+      ]);
+      drawReadings(serials, data, events, from, to);
+      drawEquipment(serials, data, from, to);
+      listEvents(events);
+    }
+
+    function joined(serials, data, columns) {
+      const tables = serials.map(s => [data[s].ts.map(t => t / 1000), ...columns(s, data[s])]);
+      return tables.length === 1 ? tables[0] : uPlot.join(tables);
+    }
+
+    function drawReadings(serials, data, events, from, to) {
+      if (!serials.some(s => data[s].ts.length)) return empty('readings', $('readings'), 'No data recorded in this range yet.');
+      const series = [{}];
+      const columns = (s, d) => {
+        const cols = [];
+        const add = (key, label, values, scale, dash) => {
+          if (!state.show.has(key) || !values.some(v => v != null)) return;
+          cols.push(values);
+          series.push({label: `${name(s)} ${label}`, stroke: color(s), width: key === 'temp' ? 2 : 1.5, dash, scale,
+            value: (u, v) => v == null ? '–' : scale === '%' ? v.toFixed(0) + ' %' : v.toFixed(1) + ' ' + deg()});
+        };
+        add('temp', 'temperature', d.temp.map(toUnit), 'temp');
+        add('target', 'setpoint', d.target.map(toUnit), 'temp', [6, 4]);
+        add('target', 'low setpoint', d.target_low.map(toUnit), 'temp', [6, 4]);
+        add('target', 'high setpoint', d.target_high.map(toUnit), 'temp', [6, 4]);
+        add('humidity', 'humidity', d.humidity, '%', [2, 3]);
+        add('outdoor', 'outdoor', d.outdoor.map(toUnit), 'temp', [1, 4]);
+        return cols;
+      };
+      const plotData = joined(serials, data, columns);
+      if (series.length === 1) return empty('readings', $('readings'), 'Nothing selected to show.');
+      const marks = state.show.has('events') ? events : [];
+      place('readings', $('readings'), {
+        height: 320,
+        cursor: {sync: {key: 'history'}},
+        scales: {x: {min: from / 1000, max: to / 1000}, '%': {range: [0, 100]}},
+        series: series.map(s => ({spanGaps: true, ...s})),
+        axes: [axis({}), axis({scale: 'temp', values: (u, v) => v.map(x => x + '°')}), axis({scale: '%', side: 1, grid: {show: false}, values: (u, v) => v.map(x => x + '%')})],
+        hooks: {
+          draw: [u => {
+            const ctx = u.ctx;
+            ctx.save();
+            ctx.lineWidth = 1;
+            for (const e of marks) {
+              const x = u.valToPos(e.ts / 1000, 'x', true);
+              if (x < u.bbox.left || x > u.bbox.left + u.bbox.width) continue;
+              ctx.strokeStyle = (SOURCE[e.source] || ['', '#94a3b8'])[1];
+              ctx.setLineDash([3, 3]);
+              ctx.beginPath(); ctx.moveTo(x, u.bbox.top); ctx.lineTo(x, u.bbox.top + u.bbox.height); ctx.stroke();
+            }
+            ctx.restore();
+          }],
+          setScale: [syncZoom('readings')],
+        },
+      }, plotData);
+    }
+
+    function drawEquipment(serials, data, from, to) {
+      const lanes = [];
+      const series = [{}];
+      const columns = (s, d) => serials.length && EQUIPMENT.flatMap(([key, label, fields], i) => {
+        const values = d.ts.map((_, j) => Math.max(...fields.map(f => d[f][j] || 0)));
+        if (!values.some(v => v > 0)) return [];
+        const lane = lanes.length;
+        lanes.push(serials.length > 1 ? `${name(s)}: ${label}` : label);
+        const hue = serials.length > 1 ? color(s) : COLORS[[4, 0, 2, 3, 5][i]];
+        series.push({label: lanes[lane], stroke: hue, fill: hue + '88', fillTo: lane, width: 1, points: {show: false},
+          paths: uPlot.paths.stepped({align: 1}), value: (u, v) => v == null ? '–' : Math.round((v - lane) / 0.8 * 100) + '%'});
+        return [values.map(v => lane + v * 0.8)];
+      });
+      const plotData = joined(serials, data, columns);
+      if (!lanes.length) return empty('equipment', $('equipment'), 'No heating, cooling, fan or humidity equipment ran in this range.');
+      place('equipment', $('equipment'), {
+        height: 50 + lanes.length * 36,
+        cursor: {sync: {key: 'history'}},
+        legend: {show: false},
+        scales: {x: {min: from / 1000, max: to / 1000}, y: {range: [0, lanes.length]}},
+        series,
+        axes: [axis({}), axis({size: 130, splits: () => lanes.map((_, i) => i + 0.4), values: () => lanes, grid: {show: false}})],
+        hooks: {setScale: [syncZoom('equipment')]},
+      }, plotData);
+    }
+
+    let syncing = false;
+    function syncZoom(self) {
+      return (u, key) => {
+        if (key !== 'x' || syncing) return;
+        syncing = true;
+        for (const [k, c] of Object.entries(charts)) if (k !== self && k !== 'daily') c.setScale('x', {min: u.scales.x.min, max: u.scales.x.max});
+        syncing = false;
+      };
+    }
+
+    function listEvents(events) {
+      const fmt = (field, v) => {
+        if (v == null) return '–';
+        if (field.startsWith('target') && !isNaN(v)) return toUnit(+v).toFixed(1) + ' ' + deg();
+        return v === 'True' ? 'on' : v === 'False' ? 'off' : v;
+      };
+      $('events').replaceChildren(...events.slice().reverse().map(e => {
+        const tr = document.createElement('tr');
+        const cells = [new Date(e.ts).toLocaleString(), name(e.serial),
+          `${FIELD[e.field] || e.field}: ${fmt(e.field, e.old)} → ${fmt(e.field, e.new)}`, (SOURCE[e.source] || [e.source])[0]];
+        for (const text of cells) { const td = document.createElement('td'); td.textContent = text; tr.append(td); }
+        return tr;
+      }));
+      if (!events.length) $('events').innerHTML = '<tr><td colspan="4" class="muted">No changes in this range.</td></tr>';
+    }
+
+    // Long-term chart
+
+    function periodStart(day, group) {
+      const d = new Date(day + 'T00:00:00Z');
+      if (group === 'week') d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7);
+      if (group === 'month') d.setUTCDate(1);
+      return d;
+    }
+
+    function summarise(rows, group, metric) {
+      const periods = new Map();
+      for (const r of rows) {
+        const key = periodStart(r.day, group).getTime();
+        const p = periods.get(key) || {n: 0, heat_s: 0, cool_s: 0, fan_s: 0, humidifier_s: 0, dehumidifier_s: 0, hdd: 0, cdd: 0, temp: [], humidity: [], outdoor: []};
+        p.n++;
+        for (const k of ['heat_s', 'cool_s', 'fan_s', 'humidifier_s', 'dehumidifier_s', 'hdd', 'cdd']) p[k] += r[k] || 0;
+        for (const [k, col] of [['temp', 'temp_avg'], ['humidity', 'humidity_avg'], ['outdoor', 'outdoor_avg']]) if (r[col] != null) p[k].push(r[col]);
+        periods.set(key, p);
+      }
+      const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+      const value = p => ({
+        heat: p.heat_s / 3600, cool: p.cool_s / 3600, fan: p.fan_s / 3600,
+        humidifier: p.humidifier_s / 3600, dehumidifier: p.dehumidifier_s / 3600,
+        heat_per_hdd: p.hdd >= p.n ? p.heat_s / 3600 / (state.unit === 'F' ? p.hdd * 1.8 : p.hdd) : null,
+        cool_per_cdd: p.cdd >= p.n ? p.cool_s / 3600 / (state.unit === 'F' ? p.cdd * 1.8 : p.cdd) : null,
+        temp_avg: toUnit(avg(p.temp)), humidity_avg: avg(p.humidity), outdoor_avg: toUnit(avg(p.outdoor)),
+      })[metric];
+      return [...periods.entries()].sort((a, b) => a[0] - b[0]).map(([t, p]) => [t, value(p)]);
+    }
+
+    async function loadDaily() {
+      const serials = selected();
+      const el = $('daily');
+      if (!serials.length) return empty('daily', el, 'Pick a thermostat.');
+      const years = +$('years').value;
+      const from = years ? new Date(Date.now() - years * 365.25 * 86400000).toISOString().slice(0, 10) : '0000-01-01';
+      const rows = await api(`/api/history/daily?serials=${serials.join(',')}&from=${from}`);
+      const metric = $('metric').value, group = $('group').value, compare = $('compare').checked;
+      const isHours = !metric.endsWith('_avg');
+      const unitLabel = metric === 'humidity_avg' ? '%' : metric.endsWith('_avg') ? deg() : metric.includes('per') ? 'h/' + (state.unit === 'F' ? '°F·day' : '°C·day') : 'h';
+      const series = [{}];
+      const tables = [];
+      const period = {day: 86400, week: 7 * 86400, month: 30 * 86400}[group];
+      serials.forEach((s, n) => {
+        const points = summarise(rows.filter(r => r.serial === s), group, metric);
+        if (!compare) {
+          // Bars of several thermostats stand side by side within each period
+          const shift = isHours && serials.length > 1 ? (n - (serials.length - 1) / 2) * period * 0.8 / serials.length : 0;
+          tables.push([points.map(p => p[0] / 1000 + shift), points.map(p => p[1])]);
+          series.push({label: name(s), stroke: color(s), fill: isHours ? color(s) + '99' : undefined, width: isHours ? 0 : 2,
+            paths: isHours ? uPlot.paths.bars({size: [0.9, 60], align: 0}) : undefined, points: {show: !isHours}, spanGaps: true});
+          return;
+        }
+        const byYear = new Map();
+        for (const [t, v] of points) {
+          const d = new Date(t);
+          const y = d.getUTCFullYear();
+          if (!byYear.has(y)) byYear.set(y, []);
+          byYear.get(y).push([Date.UTC(2000, d.getUTCMonth(), d.getUTCDate()) / 1000, v]);
+        }
+        const yearList = [...byYear.keys()].sort();
+        yearList.forEach((y, i) => {
+          const pts = byYear.get(y);
+          tables.push([pts.map(p => p[0]), pts.map(p => p[1])]);
+          const fade = Math.round(255 * (0.35 + 0.65 * (i + 1) / yearList.length)).toString(16).padStart(2, '0');
+          series.push({label: `${name(s)} ${y}`, stroke: color(s) + fade, width: i === yearList.length - 1 ? 2.5 : 1.5, spanGaps: true, points: {show: group !== 'day'}});
+        });
+      });
+      if (!tables.some(t => t[0].length)) return empty('daily', el, 'No daily summaries yet. They appear after the first day of recording.');
+      const data = tables.length === 1 ? tables[0] : uPlot.join(tables);
+      const monthName = t => new Date(t * 1000).toLocaleString(undefined, {month: 'short', timeZone: 'UTC'});
+      place('daily', el, {
+        height: 300,
+        scales: {x: {time: true}, y: {range: (u, min, max) => [isHours ? 0 : min - 1, max + (max - min) * 0.1 + 0.1]}},
+        series: series.map((s, i) => i ? {...s, value: (u, v) => v == null ? '–' : v.toFixed(isHours ? 1 : 1) + ' ' + unitLabel} : s),
+        axes: [
+          axis(compare ? {values: (u, v) => v.map(monthName)} : {}),
+          axis({values: (u, v) => v.map(x => x + (unitLabel === 'h' ? ' h' : ''))}),
+        ],
+      }, data);
+    }
+
+    // Settings and storage
+
+    async function loadSettings() {
+      const s = state.settings = await api('/api/history/settings');
+      const form = $('settings');
+      for (const el of form.elements) if (el.name && s[el.name] !== undefined) el.value = s[el.name];
+      $('recordDevices').replaceChildren(...state.devices.map(d => {
+        const label = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox'; box.dataset.record = d.serial; box.checked = !s.disabled.includes(d.serial);
+        label.append(box, ' ' + d.name);
+        return label;
+      }));
+      updateForm();
+      const st = await api('/api/history/status');
+      const mb = b => (b / 1e6).toFixed(b < 1e7 ? 2 : 0) + ' MB';
+      const stats = [
+        ['Size', mb(st.size_bytes) + (st.limit_bytes ? ' of ' + mb(st.limit_bytes) : '')],
+        ['Rows', st.samples.toLocaleString() + ' readings · ' + st.events.toLocaleString() + ' changes'],
+        ['Oldest', st.oldest ? new Date(st.oldest).toLocaleString() : '–'],
+        ['Growth', st.bytes_per_day ? mb(st.bytes_per_day) + ' per day' : 'measuring…'],
+        ['Room left', st.days_until_full != null ? Math.max(0, Math.floor(st.days_until_full)) + ' days' : s.retention === 'days' ? 'keeps ' + s.retention_days + ' days' : '–'],
+        ['Daily summaries', st.daily_rows.toLocaleString() + ' days'],
+      ];
+      $('stats').replaceChildren(...stats.map(([k, v]) => { const d = document.createElement('div'); d.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(b); return d; }));
+    }
+
+    function updateForm() {
+      const f = $('settings').elements;
+      $('changeOptions').hidden = f.mode.value !== 'changes';
+      f.interval_s.parentElement.hidden = f.mode.value === 'changes';
+      f.retention_days.parentElement.hidden = f.retention.value !== 'days';
+      f.retention_mb.parentElement.hidden = f.retention.value !== 'size';
+    }
+
+    $('settings').addEventListener('change', updateForm);
+    $('settings').addEventListener('submit', async e => {
+      e.preventDefault();
+      const f = e.target.elements;
+      const body = {mode: f.mode.value, retention: f.retention.value, timezone: f.timezone.value,
+        disabled: [...document.querySelectorAll('[data-record]')].filter(b => !b.checked).map(b => b.dataset.record)};
+      for (const k of ['interval_s', 'keepalive_s', 'retention_days', 'retention_mb']) body[k] = parseInt(f[k].value, 10);
+      for (const k of ['temp_step', 'humidity_step']) body[k] = parseFloat(f[k].value);
+      const msg = $('settingsMsg');
+      try {
+        await api('/api/history/settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        msg.className = 'muted'; msg.textContent = 'Saved.';
+        loadSettings();
+      } catch (err) { msg.className = 'error'; msg.textContent = err.message; }
+    });
+
+    // Controls
+
+    function renderControls() {
+      $('devices').replaceChildren(...state.devices.map(d => {
+        const label = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox'; box.checked = state.selected.has(d.serial);
+        box.onchange = () => { box.checked ? state.selected.add(d.serial) : state.selected.delete(d.serial); refresh(); };
+        const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = color(d.serial);
+        label.append(box, sw, ' ' + d.name);
+        return label;
+      }));
+      if (!state.devices.length) $('devices').textContent = 'No thermostats yet.';
+      $('presets').replaceChildren(...PRESETS.map(([label, days]) => {
+        const b = document.createElement('button');
+        b.textContent = label; b.className = state.days === days ? 'on' : '';
+        b.onclick = () => { state.days = days; renderControls(); refresh(); };
+        return b;
+      }));
+      const [from, to] = range();
+      $('from').value = localInput(from); $('to').value = localInput(to);
+      $('unit').value = state.unit;
+    }
+
+    async function refresh() {
+      try { await Promise.all([loadDetail(), loadDaily()]); } catch (e) { console.error(e); }
+    }
+
+    $('apply').onclick = () => {
+      const from = new Date($('from').value).getTime(), to = new Date($('to').value).getTime();
+      if (!(from < to)) return;
+      state.days = 0; state.from = from; state.to = to;
+      renderControls(); refresh();
+    };
+    $('unit').onchange = () => { state.unit = $('unit').value; refresh(); };
+    for (const box of document.querySelectorAll('[data-show]')) box.onchange = () => { box.checked ? state.show.add(box.dataset.show) : state.show.delete(box.dataset.show); loadDetail(); };
+    for (const id of ['metric', 'group', 'years', 'compare']) $(id).onchange = () => loadDaily();
+    for (const b of document.querySelectorAll('[data-export]')) b.onclick = () => {
+      const serials = selected();
+      if (!serials.length) return;
+      const [kind, format] = b.dataset.export.split(':');
+      const [from, to] = range();
+      location.href = `${BASE}/api/history/export?serials=${serials.join(',')}&kind=${kind}&format=${format}&unit=${state.unit}&from=${Math.round(from)}&to=${Math.round(to)}`;
+    };
+    let resizeTimer;
+    window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { for (const [k, c] of Object.entries(charts)) c.setSize({width: $(k).clientWidth, height: c.height}); }, 150); });
+    setInterval(() => { if (state.days && !document.hidden) loadDetail().catch(console.error); }, 60000);
+
+    (async () => {
+      state.devices = (await api('/api/devices')).devices.map(d => ({serial: d.serial, name: d.name || d.serial, scale: d.temperature_scale}));
+      state.devices.forEach(d => state.selected.add(d.serial));
+      state.unit = (state.devices[0] || {}).scale === 'F' ? 'F' : 'C';
+      try { $('zones').replaceChildren(...Intl.supportedValuesOf('timeZone').map(z => Object.assign(document.createElement('option'), {value: z}))); } catch {}
+      renderControls();
+      await Promise.all([refresh(), loadSettings()]);
+    })();
+  })();
+  </script>
+</body>
+</html>
