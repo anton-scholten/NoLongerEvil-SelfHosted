@@ -149,6 +149,24 @@ On first start the server logs a one-time setup link and QR code (`docker compos
 
 Without HTTPS the password is sent unencrypted when you sign in, so use it on a trusted network or behind an HTTPS reverse proxy.
 
+### History
+
+The server records each thermostat's temperature, humidity, setpoints, outdoor temperature and when heating, cooling, the fan, humidifier and dehumidifier run, in `history.sqlite` next to the database. It also logs setpoint, mode, away and eco changes with their source (thermostat, dashboard, Home Assistant or MQTT), and keeps a daily summary (hours of each, averages, degree days) that is not removed by retention.
+
+Settings are changed with `PUT /api/history/settings` (JSON):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `mode` | `both` | `interval`, `changes` (only when something changes) or `both` (interval plus equipment, mode and setpoint changes at once) |
+| `interval_s` | `60` | Seconds between rows in `interval` and `both` modes |
+| `keepalive_s` | `900` | `changes` mode: at least one row this often |
+| `temp_step` / `humidity_step` | `0.1` / `1` | `changes` mode: smallest change (°C / %) that counts |
+| `retention` | `days` | Keep `retention_days` (default 30) or up to `retention_mb` (default 200) |
+| `disabled` | `[]` | Serials not to record |
+| `timezone` | `TZ` or `UTC` | Day boundaries for summaries and local times in exports |
+
+Data: `GET /api/history`, `/api/history/events`, `/api/history/daily` and `/api/history/status`; `serials` is a comma-separated list and `from`/`to` take an ISO date or milliseconds. `GET /api/history/export?serials=...&format=csv|xlsx&kind=samples|events|daily&unit=C|F` downloads a file. Temperatures are stored in °C.
+
 ## API Reference
 
 ### Device API (Server Port)

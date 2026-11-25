@@ -61,6 +61,7 @@ from nolongerevil.integrations.mqtt.topic_builder import (
     build_state_topic,
     parse_object_key,
 )
+from nolongerevil.lib.change_source import change_source
 from nolongerevil.lib.consts import HaPreset
 from nolongerevil.lib.logger import get_logger
 from nolongerevil.lib.types import DeviceStateChange, IntegrationConfig
@@ -245,6 +246,7 @@ class MqttIntegration(BaseIntegration):
 
     async def _handle_ha_command(self, topic: str, payload: str) -> None:
         """Handle Home Assistant formatted command."""
+        change_source.set("home_assistant")
         prefix = self._topic_prefix
         escaped_prefix = re.escape(prefix)
         match = re.match(rf"^{escaped_prefix}/([^/]+)/ha/(.+)/set$", topic)
@@ -390,6 +392,7 @@ class MqttIntegration(BaseIntegration):
 
     async def _handle_raw_command(self, topic: str, payload: str) -> None:
         """Handle an atomic bucket or legacy single-field raw MQTT command."""
+        change_source.set("mqtt")
         prefix = self._topic_prefix
         escaped_prefix = re.escape(prefix)
         field_match = re.match(rf"^{escaped_prefix}/([^/]+)/([^/]+)/([^/]+)/set$", topic)

@@ -36,6 +36,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.23",
     "alembic>=1.13.0",
     "segno>=1.6.0",
+    "tzdata>=2024.1",
+    "xlsxwriter>=3.1.0",
 ]
 
 [project.optional-dependencies]
