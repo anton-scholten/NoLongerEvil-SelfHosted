@@ -114,8 +114,8 @@ class TestCommandSubscriptions:
     @pytest.mark.parametrize(
         ("publish_raw", "ha_discovery", "expected"),
         [
-            (True, True, ["nolongerevil/+/+/+/set"]),
-            (True, False, ["nolongerevil/+/+/+/set"]),
+            (True, True, ["nolongerevil/+/+/set", "nolongerevil/+/+/+/set"]),
+            (True, False, ["nolongerevil/+/+/set", "nolongerevil/+/+/+/set"]),
             (False, True, ["nolongerevil/+/ha/+/set"]),
             (False, False, []),
         ],
@@ -136,7 +136,10 @@ class TestCommandSubscriptions:
 
         await integration._subscribe_to_commands(client)
 
-        client.subscribe.assert_awaited_once_with("nolongerevil/+/+/+/set")
+        assert [c.args[0] for c in client.subscribe.await_args_list] == [
+            "nolongerevil/+/+/set",
+            "nolongerevil/+/+/+/set",
+        ]
 
 
 class TestMessageRouting:
