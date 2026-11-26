@@ -139,3 +139,16 @@ async def test_login_off_by_default(
     client = await aiohttp_client(app)
     assert (await client.get("/api/devices")).status == 200
     assert (await client.get("/login")).status == 404
+
+
+async def test_device_link_code_is_reused_until_used(client, aiohttp_client, app):
+    await sign_in(client)
+    first = await (await client.post("/api/auth/device-link")).json()
+    again = await (await client.post("/api/auth/device-link")).json()
+    assert again["url"] == first["url"] and 0 < again["expires_in"] <= 600
+    assert (await (await client.get("/api/auth/device-link")).json())["active"]
+    phone = await aiohttp_client(app)
+    await phone.get(first["url"][first["url"].index("/link") :], allow_redirects=False)
+    assert not (await (await client.get("/api/auth/device-link")).json())["active"]
+    fresh = await (await client.post("/api/auth/device-link")).json()
+    assert fresh["url"] != first["url"]

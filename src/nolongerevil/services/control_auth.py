@@ -96,6 +96,15 @@ class ControlAuth:
         self._codes[code] = (purpose, time.monotonic() + ttl)
         return code
 
+    def active_code(self, purpose: str) -> tuple[str, int] | None:
+        """The unused, unexpired code for `purpose` and its seconds left, if any."""
+        now = time.monotonic()
+        self._codes = {c: e for c, e in self._codes.items() if e[1] >= now}
+        for code, (kind, expiry) in self._codes.items():
+            if kind == purpose:
+                return code, int(expiry - now)
+        return None
+
     def use_code(self, code: str, purpose: str) -> bool:
         entry = self._codes.get(code)
         if entry is None or entry[0] != purpose or entry[1] < time.monotonic():

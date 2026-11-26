@@ -15,7 +15,7 @@ from nolongerevil.lib.logger import get_logger
 from nolongerevil.lib.types import APIKey, APIKeyPermissions
 from nolongerevil.middleware.api_key_auth import hash_api_key
 from nolongerevil.middleware.control_auth import COOKIE
-from nolongerevil.services.control_auth import MIN_PASSWORD_LENGTH, ControlAuth
+from nolongerevil.services.control_auth import LINK_CODE_SECONDS, MIN_PASSWORD_LENGTH, ControlAuth
 from nolongerevil.services.sqlmodel_service import SQLModelService
 
 logger = get_logger(__name__)
@@ -161,10 +161,16 @@ def create_auth_routes(app: web.Application, auth: ControlAuth, storage: SQLMode
         return web.json_response({})
 
     async def device_link(_request: web.Request) -> web.Response:
-        url = panel_url(f"/link?code={auth.new_code('link')}")
-        return web.json_response(
-            {"url": url, "svg": segno.make(url, error="m").svg_inline(scale=5)}
-        )
+        # Keep showing the same code until it is used or expires
+        active = auth.active_code("link")
+        code, seconds = active or (auth.new_code("link"), LINK_CODE_SECONDS)
+        url = panel_url(f"/link?code={code}")
+        svg = segno.make(url, error="m").svg_inline(scale=5)
+        return web.json_response({"url": url, "svg": svg, "expires_in": seconds})
+
+    async def device_link_status(_request: web.Request) -> web.Response:
+        active = auth.active_code("link")
+        return web.json_response({"active": bool(active), "expires_in": active[1] if active else 0})
 
     async def list_api_keys(_request: web.Request) -> web.Response:
         keys = await storage.get_user_api_keys(API_KEY_USER)
@@ -216,6 +222,7 @@ def create_auth_routes(app: web.Application, auth: ControlAuth, storage: SQLMode
     app.router.add_post("/api/auth/sessions/sign-out-others", sign_out_others)
     app.router.add_post("/api/auth/password", change_password)
     app.router.add_post("/api/auth/device-link", device_link)
+    app.router.add_get("/api/auth/device-link", device_link_status)
     app.router.add_get("/api/auth/api-keys", list_api_keys)
     app.router.add_post("/api/auth/api-keys", create_api_key)
     app.router.add_delete("/api/auth/api-keys/{id}", delete_api_key)
