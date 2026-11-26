@@ -487,6 +487,15 @@
       transition: all 0.15s; line-height: 1;
     }
     .sched-row-add button:hover { border-color: var(--text3); color: var(--text2); }
+    .sched-fan-row .sched-timeline { cursor: pointer; }
+    .sched-fan-band {
+      position: absolute; top: 50%; transform: translateY(-50%); height: 22px;
+      border-radius: 6px; background: rgba(148, 163, 184, 0.28); border: 1px solid rgba(148, 163, 184, 0.55);
+      font-size: 10px; font-weight: 650; color: var(--text2); white-space: nowrap; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sched-fan-off { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--text3); }
+    .fan-duty-select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); }
     .sched-gridline {
       position: absolute; top: 0; bottom: 0; width: 1px;
       background: var(--border); opacity: 0.5;
@@ -778,7 +787,9 @@
     // SSE: server pushes events when device state changes
     function connectSSE() {
       const es = new EventSource(BASE_PATH + '/api/events');
-      es.onmessage = function() {
+      es.onmessage = function(e) {
+        // A schedule waiting for the thermostat is fetched as soon as it reports
+        try { pollSchedule(JSON.parse(e.data).serial); } catch (_) {}
         // If user has active interaction, defer
         if (activeEdit) { _ssePending = true; return; }
         for (const k in scheduleCache) { if (scheduleCache[k].dirty) { _ssePending = true; return; } }
@@ -1013,6 +1024,27 @@
       return out;
     }
 
+    async function pollSchedule(serial) {
+      const sc = scheduleCache[serial];
+      if (!sc || !sc._pollTimer) return;
+      try {
+        const r = await fetch(BASE_PATH + '/api/schedule?serial=' + serial);
+        const j = await r.json();
+        if (!j.schedule) return;
+        j.schedule.days = normalizeDays(j.schedule.days);
+        const newMode = (j.schedule.schedule_mode || j.schedule.mode || '').toUpperCase();
+        const curHvac = (lastDevices.find(x => x.serial === serial)?.mode || 'heat');
+        const curTarget = (curHvac === 'heat-cool' ? 'RANGE' : curHvac.toUpperCase());
+        if (newMode === curTarget && sc._pollTimer) {
+          clearInterval(sc._pollTimer);
+          sc._pollTimer = null;
+          sc.schedule = j.schedule;
+          sc.original = JSON.parse(JSON.stringify(j.schedule));
+          renderDevices(lastDevices);
+        }
+      } catch (e) { /* keep waiting */ }
+    }
+
     async function toggleSchedule(serial) {
       const sc = scheduleCache[serial] || {};
       sc.open = !sc.open;
@@ -1072,27 +1104,8 @@
       const hvacMode = (schedMode || 'HEAT').toUpperCase();
       // If the schedule data doesn't match the HVAC mode, poll for updated data
       if (hvacMode !== 'OFF' && hvacMode !== 'EMERGENCY' && dataMode !== hvacMode) {
-        if (!sc._pollTimer) {
-          sc._pollTimer = setInterval(async () => {
-            try {
-              const r = await fetch(BASE_PATH + '/api/schedule?serial=' + serial);
-              const j = await r.json();
-              if (j.schedule) {
-                j.schedule.days = normalizeDays(j.schedule.days);
-                const newMode = (j.schedule.schedule_mode || j.schedule.mode || '').toUpperCase();
-                const curHvac = (lastDevices.find(x => x.serial === serial)?.mode || 'heat');
-                const curTarget = (curHvac === 'heat-cool' ? 'RANGE' : curHvac.toUpperCase());
-                if (newMode === curTarget) {
-                  clearInterval(sc._pollTimer);
-                  sc._pollTimer = null;
-                  sc.schedule = j.schedule;
-                  sc.original = JSON.parse(JSON.stringify(j.schedule));
-                  renderDevices(lastDevices);
-                }
-              }
-            } catch(e) { /* ignore, keep polling */ }
-          }, 5000);
-        }
+        // Fetched again as soon as the thermostat reports a change, with this as a fallback
+        if (!sc._pollTimer) sc._pollTimer = setInterval(() => pollSchedule(serial), 5000);
         return '<div class="sched-section open"><span style="color:var(--text3);font-size:12px">' +
           '<i class="mdi mdi-sync" style="animation:spin 1s linear infinite"></i> ' +
           'Waiting for device to sync ' + hvacMode.charAt(0) + hvacMode.slice(1).toLowerCase() + ' schedule...</span></div>';
@@ -1138,6 +1151,22 @@
           '<div class="sched-row-add"><button onclick="addSetpoint(' + esc + ',' + di + ')" title="Add setpoint">+</button></div>' +
         '</div>';
       }
+      const device = lastDevices.find(x => x.serial === serial);
+      if (device && device.capabilities && device.capabilities.has_fan) {
+        if (!sc.fan) { sc.fan = fanFromDevice(device); sc.fanOriginal = Object.assign({}, sc.fan); }
+        const f = sc.fan;
+        const pct = t => (t / 86400) * 100;
+        const label = f.duty === 3600 ? 'On' : Math.round(f.duty / 60) + ' min/h';
+        const parts = f.end > f.start ? [[f.start, f.end]] : [[f.start, 86400], [0, f.end]];
+        const bands = f.duty ? parts.map(([a, b]) => '<div class="sched-fan-band" style="left:' + pct(a) + '%;width:' + (pct(b) - pct(a)) + '%">' + label + '</div>').join('')
+          : '<span class="sched-fan-off">Fan schedule off</span>';
+        const fanActive = activeEdit && activeEdit.serial === serial && activeEdit.fan;
+        daysHtml += '<div class="sched-row sched-fan-row">' +
+          '<button class="sched-day-label' + (fanActive ? ' active' : '') + '" onclick="editFan(' + esc + ')" title="Edit fan schedule">Fan</button>' +
+          '<div class="sched-timeline" onclick="editFan(' + esc + ')">' + gridlines + bands + '</div>' +
+          '<div class="sched-row-add"></div>' +
+        '</div>';
+      }
       daysHtml += '</div>';
 
       // Time axis
@@ -1156,7 +1185,8 @@
         '<span class="sched-save-msg" id="schedMsg_' + serial + '"></span>' +
       '</div>';
 
-      const editorHtml = (activeEdit && activeEdit.serial === serial) ? buildDayEditorHtml(serial, activeEdit.dayIdx, scale, mode) : '';
+      const editorHtml = !(activeEdit && activeEdit.serial === serial) ? ''
+        : activeEdit.fan ? buildFanEditorHtml(serial) : buildDayEditorHtml(serial, activeEdit.dayIdx, scale, mode);
 
       return '<div class="sched-section open">' + daysHtml + axisHtml + editorHtml + saveHtml + '</div>';
     }
@@ -1285,6 +1315,53 @@
       }
       activeEdit = {serial, dayIdx, entryIdx};
       renderDevices(lastDevices);
+    }
+
+    // Fan schedule: duty = seconds the fan runs each hour (0 = off, 3600 = continuously)
+    function fanFromDevice(d) {
+      const fs = d.fan_schedule || {};
+      const duty = fs.mode === 'duty-cycle' ? (fs.duty_cycle || 900) : fs.mode === 'on' ? 3600 : 0;
+      return {duty, start: fs.start ?? 8 * 3600, end: fs.end ?? 22 * 3600};
+    }
+
+    function editFan(serial) {
+      if (activeEdit && activeEdit.serial === serial && activeEdit.fan) { closeEditor(); return; }
+      activeEdit = {serial, dayIdx: -1, entryIdx: -1, fan: true};
+      renderDevices(lastDevices);
+    }
+
+    function setFanSchedule(serial, field, value) {
+      const sc = scheduleCache[serial];
+      if (!sc || !sc.fan) return;
+      if (field === 'duty') sc.fan.duty = Number(value);
+      else {
+        const [h, m] = value.split(':').map(Number);
+        if (isNaN(h)) return;
+        sc.fan[field] = h * 3600 + (m || 0) * 60;
+      }
+      markDirty(serial);
+      renderDevices(lastDevices);
+    }
+
+    function buildFanEditorHtml(serial) {
+      const f = scheduleCache[serial].fan;
+      const q = "'" + serial + "'";
+      const options = [[0, 'Off'], [900, '15 min every hour'], [1800, '30 min every hour'], [2700, '45 min every hour'], [3600, 'Continuously']]
+        .map(([v, t]) => '<option value="' + v + '"' + (f.duty === v ? ' selected' : '') + '>' + t + '</option>').join('');
+      const time = field => '<input type="time" class="sched-time-input" step="900" value="' + secsToInputTime(f[field]) + '"' +
+        ' aria-label="' + field + '" onchange="setFanSchedule(' + q + ',\'' + field + '\',this.value)"' + (f.duty ? '' : ' disabled') + '>';
+      return '<div class="sched-editor">' +
+        '<div class="sched-editor-head">' +
+          '<span>Fan · every day</span>' +
+          '<button class="btn-icon" onclick="closeEditor()" title="Close" aria-label="Close"><i class="mdi mdi-close"></i></button>' +
+        '</div>' +
+        '<div class="sched-edit-row">' +
+          '<select class="fan-duty-select" onchange="setFanSchedule(' + q + ',\'duty\',this.value)">' + options + '</select>' +
+          '<span>from</span>' + time('start') + '<span>to</span>' + time('end') +
+        '</div>' +
+        '<div class="sched-editor-empty">Runs the fan on its own between these times, in any mode. Heating and cooling still run it as usual.</div>' +
+        '<div class="sched-editor-foot"><span></span><button class="btn-primary" onclick="closeEditor()">Done</button></div>' +
+      '</div>';
     }
 
     function editDay(serial, dayIdx) {
@@ -1425,6 +1502,7 @@
       const sc = scheduleCache[serial];
       if (!sc || !sc.original) return;
       sc.schedule = JSON.parse(JSON.stringify(sc.original));
+      if (sc.fanOriginal) sc.fan = Object.assign({}, sc.fanOriginal);
       sc.dirty = false;
       activeEdit = null;
       renderDevices(lastDevices);
@@ -1435,9 +1513,24 @@
       if (!sc || !sc.schedule) return;
       const msg = document.getElementById('schedMsg_' + serial);
       if (msg) { msg.textContent = 'Saving...'; msg.style.color = 'var(--text2)'; }
-      // Send with dict-of-dicts format (device native format)
-      const payload = Object.assign({}, sc.schedule, { days: denormalizeDays(sc.schedule.days) });
-      const result = await sendCommand(serial, 'set_schedule', payload);
+      // Only send what changed: the schedule, the fan schedule, or both
+      let result = {success: true};
+      if (JSON.stringify(sc.schedule) !== JSON.stringify(sc.original)) {
+        // Send with dict-of-dicts format (device native format)
+        const payload = Object.assign({}, sc.schedule, { days: denormalizeDays(sc.schedule.days) });
+        result = await sendCommand(serial, 'set_schedule', payload);
+      }
+      const f = sc.fan, fo = sc.fanOriginal;
+      if (result && result.success && f && fo && (f.duty !== fo.duty || f.start !== fo.start || f.end !== fo.end)) {
+        const fan = f.duty === 0 ? {fan_mode: 'auto'}
+          : {fan_mode: f.duty === 3600 ? 'on' : 'duty-cycle', fan_duty_cycle: f.duty, fan_duty_start_time: f.start, fan_duty_end_time: f.end};
+        result = await sendCommand(serial, 'set_device_setting', fan);
+        if (result && result.success) {
+          sc.fanOriginal = Object.assign({}, f);
+          const d = lastDevices.find(x => x.serial === serial);
+          if (d) d.fan_schedule = {mode: fan.fan_mode, duty_cycle: f.duty || null, start: f.start, end: f.end};
+        }
+      }
       if (result && result.success) {
         sc.dirty = false;
         sc.original = JSON.parse(JSON.stringify(sc.schedule));

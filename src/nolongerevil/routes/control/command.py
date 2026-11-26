@@ -397,6 +397,7 @@ DEVICE_SETTING_WHITELIST: set[str] = {
     # Sunblock
     "sunlight_correction_enabled",
     # Fan
+    "fan_mode",
     "fan_timer_duration_minutes",
     "fan_duty_cycle",
     "fan_duty_start_time",

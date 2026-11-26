@@ -86,6 +86,14 @@ def format_device_status(
         "fan_timer_active": isinstance(device_values.get("fan_timer_timeout", 0), (int, float))
         and device_values.get("fan_timer_timeout", 0) > time.time(),
         "fan_timer_timeout": device_values.get("fan_timer_timeout", 0),
+        # Fan schedule: run duty_cycle seconds each hour between start and end
+        # (seconds after midnight) when mode is "duty-cycle"
+        "fan_schedule": {
+            "mode": device_values.get("fan_mode", "auto"),
+            "duty_cycle": device_values.get("fan_duty_cycle"),
+            "start": device_values.get("fan_duty_start_time"),
+            "end": device_values.get("fan_duty_end_time"),
+        },
         "eco_temperatures": {
             "high": device_values.get("away_temperature_high"),
             "low": device_values.get("away_temperature_low"),
