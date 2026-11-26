@@ -122,8 +122,6 @@
         <option value="fan">Fan hours</option>
         <option value="humidifier">Humidifier hours</option>
         <option value="dehumidifier">Dehumidifier hours</option>
-        <option value="heat_per_hdd">Heating hours per degree day</option>
-        <option value="cool_per_cdd">Cooling hours per degree day</option>
         <option value="temp_avg">Average temperature</option>
         <option value="humidity_avg">Average humidity</option>
         <option value="outdoor_avg">Average outdoor temperature</option>
@@ -131,9 +129,10 @@
       <select id="group"><option value="day">Per day</option><option value="week" selected>Per week</option><option value="month">Per month</option></select>
       <select id="years"><option value="1">Past year</option><option value="2" selected>Past 2 years</option><option value="5">Past 5 years</option><option value="0">All</option></select>
       <label><input type="checkbox" id="compare"> Compare years</label>
+      <label id="normalizeLabel"><input type="checkbox" id="normalize"> Normalize</label>
     </div>
     <div id="daily" class="chart"></div>
-    <p class="note">Per degree day: heating hours divided by how much colder than 18 °C the days were on average, so years with different weather can be compared. Periods with little heating or cooling demand are left out.</p>
+    <p class="note" id="normalizeNote" hidden></p>
   </section>
 
   <dialog id="settingsDialog" aria-label="Recording settings">
@@ -455,7 +454,18 @@
       const years = +$('years').value;
       const from = years ? new Date(Date.now() - years * 365.25 * 86400000).toISOString().slice(0, 10) : '0000-01-01';
       const rows = await api(`/api/history/daily?serials=${serials.join(',')}&from=${from}`);
-      const metric = $('metric').value, group = $('group').value, compare = $('compare').checked;
+      const chosen = $('metric').value, group = $('group').value, compare = $('compare').checked;
+      // Heating and cooling hours can be divided by degree days so different weather compares fairly
+      const canNormalize = chosen === 'heat' || chosen === 'cool';
+      const normalize = canNormalize && $('normalize').checked;
+      const metric = normalize ? (chosen === 'heat' ? 'heat_per_hdd' : 'cool_per_cdd') : chosen;
+      $('normalizeLabel').hidden = !canNormalize;
+      $('normalizeNote').hidden = !normalize;
+      if (normalize) {
+        const base = {C: '18 °C', F: '64.4 °F', K: '291.15 K'}[state.unit];
+        const [kind, side] = chosen === 'heat' ? ['heating', 'colder'] : ['cooling', 'warmer'];
+        $('normalizeNote').textContent = `Per degree day: ${kind} hours divided by how much ${side} than ${base} the days were on average outside, so periods with different weather can be compared. Periods with little ${kind} demand are left out.`;
+      }
       const isHours = !metric.endsWith('_avg');
       const unitLabel = metric === 'humidity_avg' ? '%' : metric.endsWith('_avg') ? deg() : metric.includes('per') ? 'h/' + deg() + '·day' : 'h';
       const series = [{}];
@@ -643,7 +653,7 @@
       state.minutes = +v;
       renderControls(); refresh();
     };
-    for (const id of ['metric', 'group', 'years', 'compare']) $(id).onchange = () => loadDaily();
+    for (const id of ['metric', 'group', 'years', 'compare', 'normalize']) $(id).onchange = () => loadDaily();
     $('downloadButton').onclick = () => {
       const serials = selected();
       if (!serials.length) return;
